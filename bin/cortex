@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+export PYTHONPATH="/home/aboud/project-cortex/src${PYTHONPATH:+:$PYTHONPATH}"
+exec /home/aboud/project-cortex/.venv/bin/python -m cortex.cli "$@"

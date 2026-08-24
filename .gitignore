@@ -1,0 +1,6 @@
+.venv/
+data/cortex.db*
+logs/
+cache/
+__pycache__/
+*.pyc

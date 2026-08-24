@@ -1,0 +1,262 @@
+{
+ "score": "20/20",
+ "results": [
+  {
+   "project": "mushagil",
+   "task": "Fix duplicate knowledge-base document ingestion",
+   "hit": true,
+   "hits": [
+    "knowledge.controller",
+    "KnowledgeScreen"
+   ],
+   "missed": [
+    "knowledge.service"
+   ],
+   "tokens": 2629,
+   "secs": 0.03
+  },
+  {
+   "project": "mushagil",
+   "task": "Change publication snapshot behavior for knowledge entries",
+   "hit": true,
+   "hits": [
+    "publication",
+    "knowledge"
+   ],
+   "missed": [],
+   "tokens": 2301,
+   "secs": 0.02
+  },
+  {
+   "project": "campify",
+   "task": "Tenant isolation is leaking rows between workspaces",
+   "hit": true,
+   "hits": [
+    "rls",
+    "tenant"
+   ],
+   "missed": [
+    "db.ts"
+   ],
+   "tokens": 1760,
+   "secs": 0.02
+  },
+  {
+   "project": "campify",
+   "task": "Campaign launch flow fails after consent check",
+   "hit": true,
+   "hits": [
+    "campaign",
+    "consent"
+   ],
+   "missed": [],
+   "tokens": 2159,
+   "secs": 0.01
+  },
+  {
+   "project": "cvm",
+   "task": "Where is the API route registration for analytics?",
+   "hit": true,
+   "hits": [
+    "analyticsRoutes",
+    "apps/api/src/app.ts",
+    "register"
+   ],
+   "missed": [],
+   "tokens": 1750,
+   "secs": 0.02
+  },
+  {
+   "project": "cvm",
+   "task": "Add a new facade-gated domain module to the API",
+   "hit": true,
+   "hits": [
+    "facade",
+    "wiring"
+   ],
+   "missed": [
+    "app.ts"
+   ],
+   "tokens": 2702,
+   "secs": 0.02
+  },
+  {
+   "project": "telvora",
+   "task": "Fix webhook signature verification for telecom events",
+   "hit": true,
+   "hits": [
+    "webhook.go",
+    "ingestion"
+   ],
+   "missed": [],
+   "tokens": 2016,
+   "secs": 0.03
+  },
+  {
+   "project": "telvora",
+   "task": "Modify the real-time decision engine scoring",
+   "hit": true,
+   "hits": [
+    "decision",
+    "scoring"
+   ],
+   "missed": [
+    "realtime"
+   ],
+   "tokens": 1818,
+   "secs": 0.03
+  },
+  {
+   "project": "chat-agent-saas",
+   "task": "Voice call custom LLM bridge returns 404 every turn",
+   "hit": true,
+   "hits": [
+    "voiceLlm",
+    "voice"
+   ],
+   "missed": [],
+   "tokens": 2365,
+   "secs": 0.03
+  },
+  {
+   "project": "chat-agent-saas",
+   "task": "Odoo report export bypasses chat authorization - fix it",
+   "hit": true,
+   "hits": [
+    "odoo",
+    "report",
+    "export"
+   ],
+   "missed": [],
+   "tokens": 2696,
+   "secs": 0.03
+  },
+  {
+   "project": "mawid-ai",
+   "task": "WhatsApp webhook dedupe fails for repeated messages",
+   "hit": true,
+   "hits": [
+    "webhook",
+    "dedupe"
+   ],
+   "missed": [],
+   "tokens": 1769,
+   "secs": 0.01
+  },
+  {
+   "project": "mawid-ai",
+   "task": "Gemini agent loop integrity guard needs updating",
+   "hit": true,
+   "hits": [
+    "agent",
+    "gemini"
+   ],
+   "missed": [],
+   "tokens": 1724,
+   "secs": 0.01
+  },
+  {
+   "project": "luma",
+   "task": "Worker lease generation token collision on fenced queue",
+   "hit": true,
+   "hits": [
+    "worker",
+    "lease",
+    "queue"
+   ],
+   "missed": [],
+   "tokens": 1793,
+   "secs": 0.02
+  },
+  {
+   "project": "sham-v2",
+   "task": "SQL guard rejects valid Arabic question about fees",
+   "hit": true,
+   "hits": [
+    "guard",
+    "sql",
+    "agent"
+   ],
+   "missed": [],
+   "tokens": 2304,
+   "secs": 0.01
+  },
+  {
+   "project": "test-ai",
+   "task": "Nightly S3 restore job is failing",
+   "hit": true,
+   "hits": [
+    "restore",
+    "backup",
+    "s3"
+   ],
+   "missed": [],
+   "tokens": 927,
+   "secs": 0.01
+  },
+  {
+   "project": "shamsieh",
+   "task": "Fingerprint device sync from Hikvision bridge drops punches",
+   "hit": true,
+   "hits": [
+    "hikvision",
+    "fingerprint",
+    "attendance"
+   ],
+   "missed": [],
+   "tokens": 1829,
+   "secs": 0.01
+  },
+  {
+   "project": "iscc-testing",
+   "task": "Payroll deduction calculation wrong for late violations",
+   "hit": true,
+   "hits": [
+    "violation",
+    "payroll",
+    "deduction"
+   ],
+   "missed": [],
+   "tokens": 1812,
+   "secs": 0.01
+  },
+  {
+   "project": "mythos",
+   "task": "PowerPoint skill fails on generated OOXML",
+   "hit": true,
+   "hits": [
+    "powerpoint",
+    "ooxml",
+    "skill"
+   ],
+   "missed": [],
+   "tokens": 1498,
+   "secs": 0.08
+  },
+  {
+   "project": "umbrellaprime",
+   "task": "Contact form does not submit on static export",
+   "hit": true,
+   "hits": [
+    "contact",
+    "form"
+   ],
+   "missed": [],
+   "tokens": 1512,
+   "secs": 0.01
+  },
+  {
+   "project": "faraj",
+   "task": "Portfolio project card hover animation broken",
+   "hit": true,
+   "hits": [
+    "project",
+    "card",
+    "component"
+   ],
+   "missed": [],
+   "tokens": 719,
+   "secs": 0.0
+  }
+ ]
+}
