@@ -9,11 +9,11 @@ tags: [project]
 **Path:** `/home/aboud/Dev/Mushagil`  
 **Kind:** monorepo | **Languages:** .ts,.tsx,.mjs,.sql | **Frameworks:** None
 
-**HEAD:** `638838aad84d` | **Brain:** `638838aad84d` | FRESH
+**HEAD:** `2725504c477f` | **Brain:** `2725504c477f` | FRESH
 
 | Files | Symbols | Modules | Flows | APIs | DB | Tests | Decisions | Memories |
 |---|---|---|---|---|---|---|---|---|
-| 572 | 2227 | 11 | 9 | 244 | 90 | 133 | 13 | 19 (0 stale) |
+| 598 | 2412 | 11 | 9 | 254 | 97 | 132 | 13 | 19 (0 stale) |
 
 ## Modules
 - [[mushagil/modules/Background-Worker-Process|Background Worker Process]] — outbox relay, event consumers, scheduled sweeps, DLQ visibility, health endpoints. [verified]

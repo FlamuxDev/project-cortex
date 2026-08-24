@@ -12,7 +12,7 @@
    "missed": [
     "knowledge.service"
    ],
-   "tokens": 2629,
+   "tokens": 2637,
    "secs": 0.03
   },
   {
@@ -24,7 +24,7 @@
     "knowledge"
    ],
    "missed": [],
-   "tokens": 2301,
+   "tokens": 2282,
    "secs": 0.02
   },
   {
@@ -39,7 +39,7 @@
     "db.ts"
    ],
    "tokens": 1760,
-   "secs": 0.02
+   "secs": 0.01
   },
   {
    "project": "campify",
@@ -90,7 +90,7 @@
    ],
    "missed": [],
    "tokens": 2016,
-   "secs": 0.03
+   "secs": 0.02
   },
   {
    "project": "telvora",
@@ -104,7 +104,7 @@
     "realtime"
    ],
    "tokens": 1818,
-   "secs": 0.03
+   "secs": 0.02
   },
   {
    "project": "chat-agent-saas",

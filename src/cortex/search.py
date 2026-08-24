@@ -24,7 +24,8 @@ AR_EN = {
     "خصم": ["deduction", "violation"], "خصومات": ["deduction"],
     "فاتورة": ["invoice"], "فواتير": ["invoice"],
     "عميل": ["customer", "client"], "عملاء": ["customer"],
-    "حجز": ["booking", "appointment"], "الحجوزات": ["booking"],
+    "حجز": ["booking", "appointment"], "حجوزات": ["booking", "appointments"],
+    "مواعيد": ["appointments", "schedules"], "موعد": ["appointment"],
     "تقرير": ["report"], "تقارير": ["report"],
     "webhook": [], "قناة": ["channel"], "واتساب": ["whatsapp"],
     "تعديل": ["change", "update"], "اضافة": ["add", "create"],
@@ -32,15 +33,23 @@ AR_EN = {
 }
 
 
+AR_PUNCT = "؟?،؛:.!«»()[]{}\"'\u061f\u06cc"
+
+
 def keywords(q: str) -> list[str]:
     words = re.findall(r"[\w\u0600-\u06FF]+", q.lower())
+    words = [w.strip(AR_PUNCT) for w in words]
+    words = [w for w in words if w]
     out = [w for w in words if w not in STOP and w not in AR_STOP and len(w) > 1]
     extra = []
     for w in out:
         extra.extend(AR_EN.get(w, []))
         # strip definite article ال for lookup
-        if w.startswith("ال") and w[2:] in AR_EN:
-            extra.extend(AR_EN[w[2:]])
+        base = w[2:] if w.startswith("ال") else w
+        extra.extend(AR_EN.get(base, []))
+        # naive plural ة→at / at→ة bridging for common nouns
+        if base.endswith("ات") and base[:-2] in AR_EN:
+            extra.extend(AR_EN[base[:-2]])
     return out + [e for e in extra if e not in STOP]
 
 
