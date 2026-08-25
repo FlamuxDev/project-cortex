@@ -1,3 +1,8 @@
+---
+cortex-generated: true
+title: Project Cortex
+tags: [home/cortex]
+---
 # Project Cortex
 
 > Index deeply once, retrieve narrowly forever.
@@ -10,7 +15,6 @@
 - [[iscc-testing/Home|iscc-Testing]] — 80 files, 207 symbols, fresh
 - [[luma/Home|Luma]] — 477 files, 1324 symbols, fresh
 - [[mawid-ai/Home|Mawid-AI]] — 379 files, 1208 symbols, fresh
-- [[mushagil/Home|Mushagil]] — 572 files, 2227 symbols, fresh
 - [[mythos/Home|mythos]] — 2022 files, 47934 symbols, fresh
 - [[sham-v2/Home|sham-v2]] — 71 files, 516 symbols, fresh
 - [[shamsieh/Home|shamsieh]] — 297 files, 1564 symbols, fresh
@@ -22,6 +26,9 @@
 - [[Global/Engineering Principles]]
 - [[Global/Cross Project Patterns]]
 - [[Decisions/Decision Index]]
+- [[Episodes]]
+- [[Cortex Quality]]
+- [[Knowledge Health]]
 
 ## Usage
 `cortex context "<task>"` · `cortex impact "<file>"` · `cortex update`

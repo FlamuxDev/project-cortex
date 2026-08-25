@@ -18,3 +18,14 @@ invariants: paused/stopped journeys excluded at discovery AND re-checked at exec
 pitfalls: journey-originated messages have no campaign — LEFT JOIN semantics; quiet_hours_override defaults false for them (dispatch.ts:101).
 confidence: verified
 
+## Files (9+)
+
+- `packages/core/src/journeys/enroll.ts`
+- `packages/core/src/journeys/execute.ts`
+- `packages/core/src/journeys/graph.ts`
+- `packages/core/src/journeys/graph.unit.test.ts`
+- `packages/core/src/journeys/repository.ts`
+- `packages/core/src/journeys/state.ts`
+- `packages/core/src/journeys/state.unit.test.ts`
+- `packages/core/src/journeys/wait.ts`
+- `packages/core/src/journeys/wait.unit.test.ts`

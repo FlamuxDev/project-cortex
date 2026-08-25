@@ -18,3 +18,8 @@ invariants: correlation id always server-generated (client-supplied echoed separ
 pitfalls: rate limiter in-process (multiplies with N instances); authenticated throttles key on userId because BFF collapses IPs.
 confidence: verified
 
+## Files (3+)
+
+- `apps/api/src/apiKeyAuth.ts`
+- `apps/api/src/rateLimit.ts`
+- `apps/api/src/server.ts`

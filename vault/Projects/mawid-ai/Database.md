@@ -1,0 +1,104 @@
+---
+cortex-generated: true
+title: mawid-ai db
+tags: [database/project]
+---
+
+# Mawid-AI — Database
+
+92 entities.
+
+## table (92)
+
+- **admin_users** — `docker/postgres-init.sql`
+- **admin_users** — `packages/core/src/db/schema.ts`
+- **appointment_attendees** — `docker/postgres-init.sql`
+- **appointment_attendees** — `packages/core/src/db/schema.ts`
+- **appointment_attendees** — `scripts/008_workflow_extensions.sql`
+- **appointment_payments** — `docker/postgres-init.sql`
+- **appointment_payments** — `packages/core/src/db/schema.ts`
+- **appointment_ratings** — `docker/postgres-init.sql`
+- **appointment_ratings** — `packages/core/src/db/schema.ts`
+- **appointment_ratings** — `scripts/008_workflow_extensions.sql`
+- **appointment_resources** — `docker/postgres-init.sql`
+- **appointment_resources** — `packages/core/src/db/schema.ts`
+- **appointment_resources** — `scripts/008_workflow_extensions.sql`
+- **appointments** — `docker/postgres-init.sql`
+- **appointments** — `packages/core/src/db/schema.ts`
+- **assets** — `docker/postgres-init.sql`
+- **assets** — `packages/core/src/db/schema.ts`
+- **assets** — `scripts/008_workflow_extensions.sql`
+- **branches** — `docker/postgres-init.sql`
+- **branches** — `packages/core/src/db/schema.ts`
+- **branches** — `scripts/008_workflow_extensions.sql`
+- **conversations** — `docker/postgres-init.sql`
+- **conversations** — `packages/core/src/db/schema.ts`
+- **customer_packages** — `docker/postgres-init.sql`
+- **customer_packages** — `packages/core/src/db/schema.ts`
+- **customer_packages** — `scripts/008_workflow_extensions.sql`
+- **customers** — `docker/postgres-init.sql`
+- **customers** — `packages/core/src/db/schema.ts`
+- **field_visits** — `docker/postgres-init.sql`
+- **field_visits** — `packages/core/src/db/schema.ts`
+- **field_visits** — `scripts/008_workflow_extensions.sql`
+- **leads** — `docker/postgres-init.sql`
+- **leads** — `packages/core/src/db/schema.ts`
+- **messages** — `docker/postgres-init.sql`
+- **messages** — `packages/core/src/db/schema.ts`
+- **org_hour_overrides** — `docker/postgres-init.sql`
+- **org_hour_overrides** — `packages/core/src/db/schema.ts`
+- **org_hour_overrides** — `scripts/008_workflow_extensions.sql`
+- **organization_knowledge_chunks** — `docker/postgres-init.sql`
+- **organization_knowledge_chunks** — `packages/core/src/db/schema.ts`
+- **organizations** — `docker/postgres-init.sql`
+- **organizations** — `packages/core/src/db/schema.ts`
+- **packages** — `docker/postgres-init.sql`
+- **packages** — `packages/core/src/db/schema.ts`
+- **packages** — `scripts/008_workflow_extensions.sql`
+- **password_reset_tokens** — `packages/core/src/db/schema.ts`
+- **platform_settings** — `docker/postgres-init.sql`
+- **platform_settings** — `packages/core/src/db/schema.ts`
+- **platform_settings** — `scripts/014_platform_settings.sql`
+- **recurring_series** — `docker/postgres-init.sql`
+- **recurring_series** — `packages/core/src/db/schema.ts`
+- **recurring_series** — `scripts/008_workflow_extensions.sql`
+- **rentals** — `docker/postgres-init.sql`
+- **rentals** — `packages/core/src/db/schema.ts`
+- **rentals** — `scripts/008_workflow_extensions.sql`
+- **resource_time_off** — `docker/postgres-init.sql`
+- **resource_time_off** — `packages/core/src/db/schema.ts`
+- **resource_time_off** — `scripts/008_workflow_extensions.sql`
+- **resources** — `docker/postgres-init.sql`
+- **resources** — `packages/core/src/db/schema.ts`
+- **service_resource_requirements** — `docker/postgres-init.sql`
+- **service_resource_requirements** — `packages/core/src/db/schema.ts`
+- **services** — `docker/postgres-init.sql`
+- **services** — `packages/core/src/db/schema.ts`
+- **sessions** — `docker/postgres-init.sql`
+- **sessions** — `packages/core/src/db/schema.ts`
+- **staff** — `docker/postgres-init.sql`
+- **staff** — `packages/core/src/db/schema.ts`
+- **staff_services** — `docker/postgres-init.sql`
+- **staff_services** — `packages/core/src/db/schema.ts`
+- **staff_time_off** — `docker/postgres-init.sql`
+- **staff_time_off** — `packages/core/src/db/schema.ts`
+- **staff_time_off** — `scripts/008_workflow_extensions.sql`
+- **technician_locations** — `docker/postgres-init.sql`
+- **technician_locations** — `packages/core/src/db/schema.ts`
+- **technician_locations** — `scripts/008_workflow_extensions.sql`
+- **templates** — `docker/postgres-init.sql`
+- **templates** — `packages/core/src/db/schema.ts`
+- **usage_stats** — `docker/postgres-init.sql`
+- **usage_stats** — `packages/core/src/db/schema.ts`
+- **user_push_devices** — `packages/core/src/db/schema.ts`
+- **users** — `docker/postgres-init.sql`
+- **users** — `packages/core/src/db/schema.ts`
+- **whatsapp_reply_jobs** — `scripts/016_whatsapp_ai_reliability.sql`
+- **whatsapp_webhook_events** — `docker/postgres-init.sql`
+- **whatsapp_webhook_events** — `packages/core/src/db/schema.ts`
+- **work_order_items** — `docker/postgres-init.sql`
+- **work_order_items** — `packages/core/src/db/schema.ts`
+- **work_order_items** — `scripts/008_workflow_extensions.sql`
+- **work_orders** — `docker/postgres-init.sql`
+- **work_orders** — `packages/core/src/db/schema.ts`
+- **work_orders** — `scripts/008_workflow_extensions.sql`

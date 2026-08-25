@@ -15,6 +15,18 @@ tags: [project]
 |---|---|---|---|---|---|---|---|---|
 | 758 | 3467 | 13 | 7 | 402 | 104 | 197 | 8 | 21 (0 stale) |
 
+## Examiner pages
+- [[telvora/API Surface|API Surface]]
+- [[telvora/Code Map|Code Map]]
+- [[telvora/Database|Database]]
+- [[telvora/Flows|Flows]]
+- [[telvora/History & Hotspots|History & Hotspots]]
+- [[telvora/Test Map|Test Map]]
+
+## Pitfalls & rules (memories)
+- Historical lessons [verified]
+- Risks & technical debt [verified]
+
 ## Modules
 - [[telvora/modules/Analytics-Models-Decisions-Opportunities-Alerts|Analytics, models, decisions, opportunities, alerts]] — KPI semantic layer with A/B/C causal rigor grades; model registry/lifecycle/templates/monitoring; de [verified]
 - [[telvora/modules/Campaigns-Journeys-Channels-Experiments|Campaigns, journeys, channels, experiments]] — versioned campaigns with lifecycle (draft→validating→awaiting approval→running→completed/killed) + k [verified]

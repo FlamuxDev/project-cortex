@@ -18,3 +18,48 @@ invariants: /app never indexable (edge header + middleware + robots + automated 
 pitfalls: `?next` validated by origin comparison, never regex; waitForURL-before-click race pattern broke tests 3× (PROGRESS.md M15/M18).
 confidence: verified
 
+## Files (40+)
+
+- `apps/web/src/app/(app)/app/analytics/page.tsx`
+- `apps/web/src/app/(app)/app/campaigns/[id]/audience/page.tsx`
+- `apps/web/src/app/(app)/app/campaigns/[id]/channels/page.tsx`
+- `apps/web/src/app/(app)/app/campaigns/[id]/content/page.tsx`
+- `apps/web/src/app/(app)/app/campaigns/[id]/page.tsx`
+- `apps/web/src/app/(app)/app/campaigns/[id]/report/page.tsx`
+- `apps/web/src/app/(app)/app/campaigns/[id]/review/page.tsx`
+- `apps/web/src/app/(app)/app/campaigns/page.tsx`
+- `apps/web/src/app/(app)/app/contacts/[id]/page.tsx`
+- `apps/web/src/app/(app)/app/contacts/import/[jobId]/page.tsx`
+- `apps/web/src/app/(app)/app/contacts/import/page.tsx`
+- `apps/web/src/app/(app)/app/contacts/page.tsx`
+- `apps/web/src/app/(app)/app/crm/deals/[id]/page.tsx`
+- `apps/web/src/app/(app)/app/crm/page.tsx`
+- `apps/web/src/app/(app)/app/journeys/[id]/page.tsx`
+- `apps/web/src/app/(app)/app/journeys/page.tsx`
+- `apps/web/src/app/(app)/app/page.tsx`
+- `apps/web/src/app/(app)/app/plan/page.tsx`
+- `apps/web/src/app/(app)/app/sales-tasks/[id]/page.tsx`
+- `apps/web/src/app/(app)/app/sales-tasks/page.tsx`
+- `apps/web/src/app/(app)/app/segments/page.tsx`
+- `apps/web/src/app/(app)/app/team/page.tsx`
+- `apps/web/src/app/(app)/app/templates/page.tsx`
+- `apps/web/src/app/(app)/layout.tsx`
+- `apps/web/src/app/(public)/invitation/page.tsx`
+
+## API surface
+
+- `GET ai_suggestions`
+- `GET sends`
+- `GET /v1/me`
+- `GET x-forwarded-proto`
+- `GET host`
+- `POST /v1/invitations/accept`
+- `GET password`
+- `GET email`
+- `GET displayName`
+- `GET file`
+- `POST /v1/auth/logout`
+- `POST /v1/workspaces`
+- `POST /api/login`
+- `POST /api/signup`
+- `GET /api/campaigns/[id]/report.csv`

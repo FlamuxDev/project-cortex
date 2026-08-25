@@ -13,29 +13,58 @@ tags: [project]
 
 | Files | Symbols | Modules | Flows | APIs | DB | Tests | Decisions | Memories |
 |---|---|---|---|---|---|---|---|---|
-| 957 | 4589 | 13 | 5 | 551 | 135 | 161 | 10 | 21 (0 stale) |
+| 957 | 4589 | 24 | 11 | 551 | 135 | 161 | 17 | 32 (0 stale) |
+
+## Examiner pages
+- [[chat-agent-saas/API Surface|API Surface]]
+- [[chat-agent-saas/Code Map|Code Map]]
+- [[chat-agent-saas/Database|Database]]
+- [[chat-agent-saas/Flows|Flows]]
+- [[chat-agent-saas/History & Hotspots|History & Hotspots]]
+- [[chat-agent-saas/Test Map|Test Map]]
+
+## Pitfalls & rules (memories)
+- Historical lessons [verified]
+- Risks & technical debt [verified]
 
 ## Modules
-- [[chat-agent-saas/modules/Background-Processing-Tier|Background processing tier]] — all BullMQ processors + periodic sweeps, runnable standalone in prod. [verified]
-- [[chat-agent-saas/modules/Botify-Odoo-Module-Python|Botify Odoo module (Python)]] — in-Odoo addon providing signed nonce auth, delegation, policy enforcement at the source, so end-user [inferred]
-- [[chat-agent-saas/modules/Campaigns-Journeys-Audiences-Push-Social|Campaigns, journeys, audiences, push, social]] — multi-channel outbound marketing (email/push/social/WhatsApp/SMS lineage), segments, journeys automa [inferred]
-- [[chat-agent-saas/modules/Chat-Pipeline-Agent-Runtime|Chat pipeline & agent runtime]] — public + authenticated chat endpoints, the tool loop, streaming, quotas, handoff, safety screening. [verified]
-- [[chat-agent-saas/modules/Embeddable-Chat-Widget|Embeddable chat widget]] — dependency-light vanilla-TS embeddable widget: chat, image upload, voice, handoff, per-agent theming [verified]
-- [[chat-agent-saas/modules/End-User-Identity-Durable-Memory|End-user identity & durable memory]] — third auth concept (distinct from tenant JWT and platform-admin JWT): widget visitor identities, opt [verified]
-- [[chat-agent-saas/modules/Knowledge-Ingestion-Rag|Knowledge ingestion & RAG]] — per-tenant knowledge sources → extraction → chunking → embeddings → pgvector retrieval; suggestions; [inferred]
-- [[chat-agent-saas/modules/Odoo-Dynatrace-Splunk-Mcp-Channel-Providers|Odoo / Dynatrace / Splunk / MCP / channel providers]] — native tool adapters + OAuth/connection lifecycle for customer systems; capability discovery; eviden [inferred]
-- [[chat-agent-saas/modules/Orgs-Billing-Rbac-System-Config-Notifications-Files-Reports-Artifacts|Orgs, billing, RBAC, system config, notifications, files, reports/artifacts]] — tenant administration, custom billing/quota, plan catalog, platform-admin API surface, SystemConfig  [inferred]
-- [[chat-agent-saas/modules/Platform-Owner-Console|Platform owner console]] — manage orgs, billing, system config, feature catalog, integration tokens; separate identity + noinde [strongly_inferred]
-- [[chat-agent-saas/modules/Shared-Types-Ci-Deploy-Tooling|Shared types, CI, deploy tooling]] — cross-package constants/types (systemConfigKeys.ts, ORG_FEATURE_CATALOG); deploy scripts with guardr [verified]
-- [[chat-agent-saas/modules/Tenant-Web-App-Next-Js-16|Tenant web app (Next.js 16)]] — auth screens + full dashboard (agents, conversations, analytics, knowledge, integrations UI, outreac [verified]
-- [[chat-agent-saas/modules/Voice-Calls-Custom-Llm-Bridge-Legacy-Webhook-Mcp-Server|Voice calls (custom-LLM bridge, legacy webhook, MCP server)]] — wire ElevenLabs Conversational AI agents to Botify brains; sync agent config/prompts/knowledge; impo [verified]
+- [[chat-agent-saas/modules/Agents-Crud-Config|agents CRUD + config]] —  [inferred]
+- [[chat-agent-saas/modules/Ai-Studio-Notifications|ai-studio & notifications]] —  [inferred]
+- [[chat-agent-saas/modules/Analytics-Quality-Analysis|analytics / quality analysis]] —  [inferred]
+- [[chat-agent-saas/modules/Artifacts-Files-Reports|artifacts / files / reports]] —  [inferred]
+- [[chat-agent-saas/modules/Auth-Session-Dashboard-Identity|auth & session (dashboard identity)]] —  [inferred]
+- [[chat-agent-saas/modules/Billing-Plans-Quotas|billing / plans / quotas]] —  [inferred]
+- [[chat-agent-saas/modules/Booking-Demo-Scheduler|booking (demo scheduler)]] —  [inferred]
+- [[chat-agent-saas/modules/Channels-Whatsapp-Messaging-Integrations|channels / WhatsApp & messaging integrations]] —  [inferred]
+- [[chat-agent-saas/modules/Chat-Conversation-Engine|chat / conversation engine]] —  [inferred]
+- [[chat-agent-saas/modules/Consent-Compliance-Gdpr|consent / compliance / GDPR]] —  [inferred]
+- [[chat-agent-saas/modules/External-Identity-Odoo-Sso-Into-Chat|external identity (Odoo SSO into chat)]] —  [inferred]
+- [[chat-agent-saas/modules/Knowledge-Rag|knowledge / RAG]] —  [inferred]
+- [[chat-agent-saas/modules/Llm-Ai-Layer|LLM / AI layer]] —  [inferred]
+- [[chat-agent-saas/modules/Mcp-Model-Context-Protocol|MCP (model context protocol)]] —  [inferred]
+- [[chat-agent-saas/modules/Notifications-Audit-Logs|notifications & audit logs]] —  [inferred]
+- [[chat-agent-saas/modules/Odoo-Dynatrace-Splunk-Native-Enterprise-Connectors|odoo / dynatrace / splunk (native enterprise connectors)]] —  [inferred]
+- [[chat-agent-saas/modules/Outreach-Campaign-Manager|outreach / Campaign Manager]] —  [inferred]
+- [[chat-agent-saas/modules/Prompt-Personality-Layer|prompt & personality layer]] —  [inferred]
+- [[chat-agent-saas/modules/Safety-Screening-Layer|safety screening layer]] —  [inferred]
+- [[chat-agent-saas/modules/Social-Publishing-Push|social publishing & push]] —  [inferred]
+- [[chat-agent-saas/modules/Tenancy-Org-Isolation|tenancy / org isolation]] —  [inferred]
+- [[chat-agent-saas/modules/Transcript-Crawler-Services|transcript & crawler services]] —  [inferred]
+- [[chat-agent-saas/modules/Voice-Elevenlabs|voice / ElevenLabs]] —  [inferred]
+- [[chat-agent-saas/modules/Widget-Client-Embeddable-Frontend|widget client (embeddable frontend)]] —  [inferred]
 
 ## Flows
-- **Text chat turn (public widget or dashboard)** — user sends message via REST/SSE.
-- **Voice call turn (custom-LLM path** — ElevenLabs Conversational AI agent POSTs OpenAI-shaped request per spoken turn.
-- **Knowledge ingestion** — tenant adds/updates KnowledgeSource (URL/upload) or scheduled recrawl sweep fires.
-- **Outreach send** — campaign approved/scheduled, or journey step due.
-- **Production deploy (manual)** — human runs ./deploy.sh after npm run build.
+- **1) Inbound WhatsApp (v2) → reply** — 
+- **2) Agent creation/config** — 
+- **3) Knowledge ingestion → retrieval** — 
+- **4) Booking flow** — 
+- **5) Auth/login session issuance** — 
+- **6) Org onboarding (register)** — 
+- **7) Human handoff (discovered flow)** — user asks / `[ESCALATE_TO_HUMAN]` marker (stripped from KB chunks so RAG can't plant it, `rag.ts:24-26`) / safety verdic
+- **8) Voice custom-LLM turn (branch namesake)** — 
+- **9) Scheduled knowledge recrawl (discovered flow)** — 
+- **10) Support inbox reply (discovered flow)** — 
+- **11) Campaign send (Campaign Manager)** — 
 
 ## Key knowledge
 - Architecture [strongly_inferred]

@@ -4,7 +4,7 @@ Generated files carry frontmatter `cortex-generated: true`; anything else is
 treated as human-curated and never overwritten.
 """
 from __future__ import annotations
-import pathlib, re, sys
+import json, pathlib, re, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from cortex.db import connect
@@ -56,6 +56,203 @@ def project_status(con, pid):
     }
 
 
+def _deep_pages(con, pid: str, prow) -> int:
+    """Six examiner pages per project, all derived from the indexed DB.
+    Every fact links back to a real file path."""
+    count = 0
+    P = VAULT / "Projects" / pid
+
+    # ---------- API SURFACE ----------
+    apis = con.execute("""SELECT method, route, handler_path, handler_symbol, direction
+                          FROM apis WHERE project_id=? ORDER BY handler_path, route""", (pid,)).fetchall()
+    import re as _re
+    apis = [a for a in apis if a["handler_path"] and not _re.search(
+        r"(^|/)__(tests|e2e)__|\.(test|spec)\.|_test\.", a["handler_path"])]
+    body = [fm(f"{pid} api", "[api/project]"),
+            f"# {prow['name']} — API Surface", "",
+            f"{len(apis)} routes. Grouped by owning file; every route names its handler.", ""]
+    by_file = {}
+    for a in apis:
+        by_file.setdefault(a["handler_path"] or "(unbound)", []).append(a)
+    for f in sorted(by_file):
+        rows = by_file[f]
+        body.append(f"## `{f}`")
+        if f != "(unbound)":
+            mod = con.execute("SELECT slug FROM module_files mf JOIN modules m ON m.id=mf.module_id "
+                              "WHERE mf.project_id=? AND mf.path=? LIMIT 1", (pid, f)).fetchone()
+            if mod:
+                body.append(f"*module: [[{pid}/modules/{mod['slug'].title()}|{mod['slug']}]]*")
+        body.append("")
+        for a in rows[:40]:
+            hs = (a["handler_symbol"] or "").split("\n")[0].strip()
+            if len(hs) > 50 or "(" in hs:
+                m = _re.match(r"[A-Za-z_$][\w$]*", hs)
+                hs = m.group(0) if m else ""
+                hs = f"`{hs}`" if hs else ""
+            sym = f" → {hs}" if hs else ""
+            d = f" [{a['direction']}]" if a["direction"] and a["direction"] != "server" else ""
+            body.append(f"- **{a['method']}** `{a['route']}`{sym}{d}")
+        if len(rows) > 40:
+            body.append(f"- …and {len(rows)-40} more")
+        body.append("")
+    w(P / "API Surface.md", "\n".join(body))
+    count += 1
+
+    # ---------- DATABASE ----------
+    ents = con.execute("""SELECT name, kind, file_path FROM db_entities
+                          WHERE project_id=? ORDER BY kind, name""", (pid,)).fetchall()
+    body = [fm(f"{pid} db", "[database/project]"),
+            f"# {prow['name']} — Database", "", f"{len(ents)} entities.", ""]
+    by_kind = {}
+    for e in ents:
+        by_kind.setdefault(e["kind"] or "table", []).append(e)
+    order = ["table", "view", "type", "function", "bucket", "model"]
+    for kind in sorted(by_kind, key=lambda k: (order.index(k) if k in order else 99, k)):
+        rows = by_kind[kind]
+        body += [f"## {kind} ({len(rows)})", ""]
+        for e in rows[:120]:
+            body.append(f"- **{e['name']}** — `{e['file_path']}`")
+        if len(rows) > 120:
+            body.append(f"- …and {len(rows)-120} more")
+        body.append("")
+    rls = con.execute("""SELECT name, path FROM symbols WHERE project_id=? AND kind='rls_policy'
+                         ORDER BY path""", (pid,)).fetchall()
+    if rls:
+        body += ["## RLS policies (row-level security)", "",
+                 "Defense-in-depth check: app-layer tenancy + these policies must BOTH hold.", ""]
+        body += [f"- `{r['name']}` — `{r['path']}`" for r in rls[:60]]
+        if len(rls) > 60:
+            body.append(f"- …and {len(rls)-60} more")
+        body.append("")
+    w(P / "Database.md", "\n".join(body))
+    count += 1
+
+    # ---------- FLOWS ----------
+    flows = con.execute("SELECT * FROM flows WHERE project_id=?", (pid,)).fetchall()
+    body = [fm(f"{pid} flows", "[flows/project]"),
+            f"# {prow['name']} — Product Flows", "",
+            "End-to-end behaviors as verified from source. Files are the evidence trail.", ""]
+    for f in flows:
+        body.append(f"## {f['name']}")
+        if f["trigger"]:
+            body.append(f"**Trigger:** {f['trigger']}")
+        conf = f" · confidence: {f['confidence']}" if f["confidence"] else ""
+        body.append(f"*[[{pid}]]{conf}*")
+        if f["steps_md"]:
+            body.append("\n" + str(f["steps_md"])[:3000])
+        try:
+            fls = json.loads(f["files_json"] or "[]") if isinstance(f["files_json"], str) else []
+        except Exception:
+            fls = []
+        if fls:
+            body += ["", "**Files:**"]
+            body += [f"- `{x}`" for x in fls[:20]]
+        body.append("")
+    if not flows:
+        body.append("_no flows recorded_")
+    w(P / "Flows.md", "\n".join(body))
+    count += 1
+
+    # ---------- TEST MAP ----------
+    tests = con.execute("SELECT path, name, kind, targets_json FROM tests WHERE project_id=?",
+                        (pid,)).fetchall()
+    kinds = {}
+    for t in tests:
+        kinds.setdefault(t["kind"] or "unit", []).append(t)
+    body = [fm(f"{pid} tests", "[tests/project]"),
+            f"# {prow['name']} — Test Map", "", f"{len(tests)} test files.", ""]
+    body += ["| Kind | Count |", "|---|---|"]
+    body += [f"| {k} | {len(v)} |" for k, v in sorted(kinds.items())]
+    body.append("")
+    for kind in ("e2e", "integration", "unit"):
+        rows = kinds.get(kind, [])
+        if not rows:
+            continue
+        body += [f"## {kind} ({len(rows)})", ""]
+        for t in rows[:50]:
+            n_t = len(json.loads(t["targets_json"] or "[]"))
+            body.append(f"- `{t['path']}`" + (f" — covers {n_t} targets" if n_t else ""))
+        if len(rows) > 50:
+            body.append(f"- …and {len(rows)-50} more")
+        body.append("")
+    # which source areas lack any mapped test?
+    tested_targets = set()
+    for t in tests:
+        try:
+            tested_targets |= set(json.loads(t["targets_json"] or "[]"))
+        except Exception:
+            pass
+    untested = [r["path"] for r in con.execute(
+        """SELECT path FROM files WHERE project_id=? AND is_test=0 AND is_entry=0
+           AND lang IN ('ts','tsx','js','py','go')
+           AND importance > 0.5 ORDER BY importance DESC LIMIT 400""", (pid,))
+        if not any(t.endswith(r["path"].rsplit("/",1)[-1].rsplit(".",1)[0]) or
+                   r["path"].rsplit("/",1)[-1].rsplit(".",1)[0] in t for t in tested_targets)]
+    if untested:
+        body += ["## High-importance code with no obvious mapped test", "",
+                 "_Heuristic (name/import match). Verify before treating as gaps._", ""]
+        body += [f"- `{x}`" for x in untested[:25]]
+        body.append("")
+    w(P / "Test Map.md", "\n".join(body))
+    count += 1
+
+    # ---------- CODE MAP ----------
+    import collections
+    dirs = collections.Counter()
+    for r in con.execute("SELECT path FROM files WHERE project_id=?", (pid,)):
+        top = r["path"].split("/")[0]
+        dirs[top] += 1
+    body = [fm(f"{pid} code map", "[codemap/project]"),
+            f"# {prow['name']} — Code Map", "", "## Directory layout (indexed files)", ""]
+    for d, c in dirs.most_common(30):
+        body.append(f"- `{d}/` — {c} files")
+    entries = con.execute("""SELECT path, loc FROM files WHERE project_id=? AND is_entry=1
+                             ORDER BY importance DESC LIMIT 15""", (pid,)).fetchall()
+    if entries:
+        body += ["", "## Entry points", ""]
+        body += [f"- `{e['path']}`" for e in entries]
+    top_syms = con.execute("""SELECT name, kind, path, line_start, importance FROM symbols
+                              WHERE project_id=? AND parent IS NULL
+                              ORDER BY importance DESC LIMIT 30""", (pid,)).fetchall()
+    body += ["", "## Most-connected symbols (fan-in leaders)", "",
+             "| Symbol | Kind | Location |", "|---|---|---|"]
+    for s in top_syms:
+        body.append(f"| `{s['name']}` | {s['kind']} | `{s['path']}:{s['line_start']}` |")
+    hot_files = con.execute("""SELECT path, importance, loc FROM files WHERE project_id=?
+                               AND is_test=0 ORDER BY importance DESC LIMIT 25""", (pid,)).fetchall()
+    body += ["", "## Highest-importance files", ""]
+    body += [f"- `{h['path']}` ({h['loc'] or '?'} loc)" for h in hot_files]
+    w(P / "Code Map.md", "\n".join(body))
+    count += 1
+
+    # ---------- HISTORY & HOTSPOTS ----------
+    commits = con.execute("""SELECT sha, date, subject, category FROM commits
+                             WHERE project_id=? ORDER BY date DESC""", (pid,)).fetchall()
+    cats = collections.Counter(c["category"] or "other" for c in commits)
+    hotspot = con.execute("""SELECT cf.path, COUNT(*) x FROM commit_files cf
+                             WHERE cf.project_id=? GROUP BY cf.path ORDER BY x DESC LIMIT 20""",
+                          (pid,)).fetchall()
+    fixes = [c for c in commits if c["category"] == "fix"][:20]
+    body = [fm(f"{pid} history", "[history/project]"),
+            f"# {prow['name']} — History & Hotspots", "",
+            f"{len(commits)} mined commits.", ""]
+    if cats:
+        body += ["## Commit mix", "", "| Category | Count |", "|---|---|"]
+        body += [f"| {k} | {v} |" for k, v in cats.most_common()]
+        body.append("")
+    if hotspot:
+        body += ["## Hotspots (most-changed files — treat changes here carefully)", ""]
+        body += [f"- `{h['path']}` — touched {h['x']}×" for h in hotspot]
+        body.append("")
+    if fixes:
+        body += ["## Recent fixes (past pitfalls live here)", ""]
+        body += [f"- `{c['sha'][:10]}` {c['date']} {str(c['subject'])[:110]}" for c in fixes]
+        body.append("")
+    w(P / "History & Hotspots.md", "\n".join(body))
+    count += 1
+    return count
+
+
 def generate(con):
     from cortex.session import quality_report
     n = {"files": 0}
@@ -73,7 +270,7 @@ def generate(con):
               "- [[Global/Cross Project Patterns]]", "- [[Decisions/Decision Index]]",
               "- [[Episodes]]", "- [[Cortex Quality]]", "- [[Knowledge Health]]",
               "", "## Usage", "`cortex context \"<task>\"` · `cortex impact \"<file>\"` · `cortex update`"]
-    w(VAULT / "Home.md", "\n".join(lines) + "\n")
+    w(VAULT / "Home.md", fm("Project Cortex", "[home/cortex]") + "\n".join(lines) + "\n")
     n["files"] += 1
 
     # ---- learning loop pages
@@ -141,7 +338,16 @@ def generate(con):
                  f"|---|---|---|---|---|---|---|---|---|\n"
                  f"| {s['files']} | {s['symbols']} | {s['modules']} | {s['flows']} | {s['apis']} | "
                  f"{s['db']} | {s['tests']} | {s['decisions']} | {s['memories']} ({s['stale_mem']} stale) |")
-        body += [stats, "", "## Modules"]
+        sub = ["API Surface", "Code Map", "Database", "Flows", "History & Hotspots", "Test Map"]
+        body += [stats, "", "## Examiner pages"]
+        body += [f"- [[{pid}/{s}|{s}]]" for s in sub]
+        body += ["", "## Pitfalls & rules (memories)"]
+        for mem in con.execute("""SELECT title,confidence,stale FROM memories
+                                  WHERE project_id=? AND scope IN ('pitfall','business_rule','history')
+                                  ORDER BY scope LIMIT 15""", (pid,)):
+            st = " ⚠️stale" if mem["stale"] else ""
+            body.append(f"- {mem['title']} [{mem['confidence']}]{st}")
+        body += ["", "## Modules"]
         mods = con.execute("SELECT * FROM modules WHERE project_id=? ORDER BY slug", (pid,)).fetchall()
         for m in mods:
             body.append(f"- [[{pid}/modules/{m['slug'].title()}|{m['name']}]] — {(m['purpose'] or '')[:100]} [{m['confidence']}]")
@@ -162,13 +368,12 @@ def generate(con):
           fm(pid, "[project]") + f"# {p['name']}\n\nSee [[{pid}]].\n")
         n["files"] += 1
 
+        n["files"] += _deep_pages(con, pid, p)
+
         # ---- module notes
         for m in mods:
             mf = [r["path"] for r in con.execute(
                 "SELECT path FROM module_files WHERE module_id=? ORDER BY path LIMIT 40", (m["id"],))]
-            flows_here = [r["name"] for r in con.execute(
-                "SELECT name FROM flows WHERE project_id=?", (pid,))
-                if any(x and x in json_files(r) for x in [])]
             note = [fm(m["slug"], "[module]"),
                     f"# {m['name']}", "",
                     f"**Project:** [[{pid}]] | **Confidence:** {m['confidence']} | **verified@** `{(m['verified_at_commit'] or '')[:12]}`",

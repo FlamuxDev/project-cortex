@@ -15,6 +15,18 @@ tags: [project]
 |---|---|---|---|---|---|---|---|---|
 | 80 | 207 | 9 | 3 | 0 | 0 | 3 | 6 | 17 (0 stale) |
 
+## Examiner pages
+- [[iscc-testing/API Surface|API Surface]]
+- [[iscc-testing/Code Map|Code Map]]
+- [[iscc-testing/Database|Database]]
+- [[iscc-testing/Flows|Flows]]
+- [[iscc-testing/History & Hotspots|History & Hotspots]]
+- [[iscc-testing/Test Map|Test Map]]
+
+## Pitfalls & rules (memories)
+- Historical lessons [verified]
+- Risks & technical debt [verified]
+
 ## Modules
 - [[iscc-testing/modules/Botify-Agent|botify_agent]] — Floating AI chat widget whose tool calls execute as the logged-in employee, not a shared integration [inferred]
 - [[iscc-testing/modules/Iscc-Attendance-Sync|iscc_attendance_sync]] — Pull punches from external systems (Sprinklr or generic HTTP JSON, plus a mock provider) into `hr.at [inferred]

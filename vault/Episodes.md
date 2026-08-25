@@ -8,22 +8,6 @@ tags: [episodes/cortex]
 
 Validated knowledge extracted from completed tasks. Query via `cortex episode list` / packets' PAST TASK LESSONS.
 
-## عدل نظام الحجوزات بحيث نتجنب duplicate creation
-`mushagil` · partial · inferred
-- **Lessons:** Idempotency checks for booking creation belong in business-capacity BookingPolicyService before any state transition.
-
-## عدل نظام الحجوزات بحيث نتجنب duplicate creation
-`mushagil` · partial · inferred
-- **Problem:** duplicate booking creation when clients retry
-- **Root cause:** booking policy service has no idempotency guard; retry path re-enters create
-- **Lessons:** Booking dedupe must live in the business-capacity module: BookingPolicyService + policies.controller own draft/publish state machines, so any idempotency key check belongs there before state transition. Never retry create without a client request fingerprint.
-
-## random task xyz
-`mushagil` · abandoned · inferred
-- **Problem:** random task xyz (deliberate error-path probe from /tmp)
-- **Root cause:** Not a real task; cwd was /tmp outside any project.
-- **Failed approaches:** Ran task start outside a project directory; cortex fell back to lexical detection and picked mushagil, fuzzy-matching 'random' to crypto.randomUUID() symbols — noise, not signal.
-
 ## وين الشي الي يمنع duplicate requests؟
 `sham-v2` · partial · inferred
 - **Problem:** وين الشي الي يمنع duplicate requests؟ (What prevents duplicate requests?)
@@ -53,9 +37,3 @@ Validated knowledge extracted from completed tasks. Query via `cortex episode li
 - **Problem:** Where would I modify document ingestion?
 - **Root cause:** Document/data ingestion lives entirely in packages/modules/src/ingestion/ — REST intake in http/routes.ts (Ingestion API, /v1/ingest/*), validation pipeline in application/pipeline.ts (ingestChunk), contract registry in application/registry.ts, public facade index.ts. Modification point depends on layer: route validation vs chunk processing vs contract spec.
 - **Lessons:** CVM document ingestion is a self-contained module under packages/modules/src/ingestion/: HTTP intake + sync validation in http/routes.ts, async processing via application/pipeline.ts ingestChunk, data contracts parsed by domain/contract.ts parseContractSpec; the module's only legal import path is its index.ts facade
-
-## Fix duplicate booking creation on retry
-`mushagil` · partial · inferred
-- **Problem:** Fix duplicate booking creation on retry
-- **Root cause:** Booking behavior lives in packages/modules/business-capacity/src/application/booking-policy-service.ts (BookingPolicyService, BookingPolicyView) plus domain/state-machines.ts; retry semantics live in the platform queue layer (QueueWrapper DLQ/retry tested by packages/database/tests/integration/queue-dlq-retry.test.ts). No literal 'duplicate' dedupe code found — matches packet EVIDENCE WARNING.
-- **Lessons:** Mushagil booking policy logic is centralized in packages/modules/business-capacity/src/application/booking-policy-service.ts via BookingPolicyService with draft/publish state transitions in ../domain/state-machines.ts; queue retry/DLQ semantics are owned by @mushagil/platform QueueWrapper and integration-tested in packages/database/tests/integration/queue-dlq-retry.test.ts

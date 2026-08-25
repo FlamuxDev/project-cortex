@@ -185,6 +185,7 @@ def ingest_all(con) -> dict:
             results[pid] = "SKIPPED (project not indexed)"
             continue
         con.execute("DELETE FROM memories WHERE project_id=? AND origin='delegate'", (pid,))
+        con.execute("DELETE FROM module_files WHERE module_id IN (SELECT id FROM modules WHERE project_id=?)", (pid,))
         con.execute("DELETE FROM modules WHERE project_id=?", (pid,))
         con.execute("DELETE FROM flows WHERE project_id=?", (pid,))
         con.execute("DELETE FROM decisions WHERE project_id=? AND source LIKE 'REPORT%'", (pid,))

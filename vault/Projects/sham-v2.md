@@ -15,6 +15,18 @@ tags: [project]
 |---|---|---|---|---|---|---|---|---|
 | 71 | 516 | 7 | 4 | 38 | 93 | 12 | 7 | 15 (0 stale) |
 
+## Examiner pages
+- [[sham-v2/API Surface|API Surface]]
+- [[sham-v2/Code Map|Code Map]]
+- [[sham-v2/Database|Database]]
+- [[sham-v2/Flows|Flows]]
+- [[sham-v2/History & Hotspots|History & Hotspots]]
+- [[sham-v2/Test Map|Test Map]]
+
+## Pitfalls & rules (memories)
+- Historical lessons [verified]
+- Risks & technical debt [verified]
+
 ## Modules
 - [[sham-v2/modules/Api-Surface|API surface]] — thin REST adapter; session hygiene; admin-only SQL disclosure. [inferred]
 - [[sham-v2/modules/Ask-Pipeline|ask() pipeline]] — one path from any channel's question to a grounded Arabic answer. [inferred]

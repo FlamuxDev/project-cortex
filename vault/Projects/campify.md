@@ -15,6 +15,18 @@ tags: [project]
 |---|---|---|---|---|---|---|---|---|
 | 298 | 1347 | 20 | 8 | 73 | 109 | 71 | 14 | 28 (0 stale) |
 
+## Examiner pages
+- [[campify/API Surface|API Surface]]
+- [[campify/Code Map|Code Map]]
+- [[campify/Database|Database]]
+- [[campify/Flows|Flows]]
+- [[campify/History & Hotspots|History & Hotspots]]
+- [[campify/Test Map|Test Map]]
+
+## Pitfalls & rules (memories)
+- Historical lessons [verified]
+- Risks & technical debt [verified]
+
 ## Modules
 - [[campify/modules/Ast-Compiled-To-Parameterised-Sql|AST compiled to parameterised SQL]] — dynamic/static audiences defined as JSON AST, compiled live with bind params only. [verified]
 - [[campify/modules/Campaign-Domain-State-Machine-Audience-Approval|campaign domain, state machine, audience, approval]] — lifecycle draft→in_review→scheduled→running… with version-bound four-eyes approval. [verified]

@@ -18,3 +18,15 @@ invariants: raw-body bytes preserved for signature verification (app.ts:335 repl
 pitfalls: ANY non-2xx retries all 5 attempts (deleted endpoint burns budget; ponytail-flagged in dispatch.ts).
 confidence: verified
 
+## Files (10+)
+
+- `packages/adapters/webhook-http/src/index.contract.test.ts`
+- `packages/adapters/webhook-http/src/index.ts`
+- `packages/core/src/webhooks/dispatch.ts`
+- `packages/core/src/webhooks/inboundSigning.ts`
+- `packages/core/src/webhooks/inboundSigning.unit.test.ts`
+- `packages/core/src/webhooks/repository.ts`
+- `packages/core/src/webhooks/signing.ts`
+- `packages/core/src/webhooks/signing.unit.test.ts`
+- `packages/core/src/webhooks/urlGuard.ts`
+- `packages/core/src/webhooks/urlGuard.unit.test.ts`

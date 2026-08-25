@@ -18,3 +18,16 @@ invariants: fakes perform ZERO network I/O; real email requires BOTH key+from (h
 pitfalls: queue visibility timeout coarse/fixed; ordering best-effort (ponytail comments name BullMQ upgrade path).
 confidence: verified
 
+## Files (11+)
+
+- `packages/adapters/ai-gemini/src/index.ts`
+- `packages/adapters/ai-gemini/src/prompt.ts`
+- `packages/adapters/ai-gemini/src/prompt.unit.test.ts`
+- `packages/adapters/email-resend/src/index.ts`
+- `packages/adapters/email-resend/src/index.unit.test.ts`
+- `packages/adapters/fake/src/failure.unit.test.ts`
+- `packages/adapters/fake/src/index.ts`
+- `packages/adapters/queue-inprocess/src/index.contract.test.ts`
+- `packages/adapters/queue-inprocess/src/index.ts`
+- `packages/adapters/webhook-http/src/index.contract.test.ts`
+- `packages/adapters/webhook-http/src/index.ts`

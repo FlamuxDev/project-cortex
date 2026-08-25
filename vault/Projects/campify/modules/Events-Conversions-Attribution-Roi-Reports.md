@@ -18,3 +18,14 @@ invariants: attribution is last-touch in-campaign, explicitly labelled (D8 stand
 pitfalls: executiveDashboard is N+1 per campaign (ponytail-flagged, LAUNCH_READINESS §3).
 confidence: verified
 
+## Files (9+)
+
+- `apps/api/src/apiReadRoutes.ts`
+- `packages/core/src/analytics/abtest.ts`
+- `packages/core/src/analytics/abtest.unit.test.ts`
+- `packages/core/src/analytics/attribution.ts`
+- `packages/core/src/analytics/attribution.unit.test.ts`
+- `packages/core/src/analytics/repository.ts`
+- `packages/core/src/analytics/roi.ts`
+- `packages/core/src/analytics/roi.unit.test.ts`
+- `packages/core/src/integrations/apiKeys.ts`

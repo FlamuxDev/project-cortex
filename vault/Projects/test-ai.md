@@ -15,6 +15,18 @@ tags: [project]
 |---|---|---|---|---|---|---|---|---|
 | 95 | 1055 | 10 | 5 | 36 | 97 | 29 | 7 | 18 (0 stale) |
 
+## Examiner pages
+- [[test-ai/API Surface|API Surface]]
+- [[test-ai/Code Map|Code Map]]
+- [[test-ai/Database|Database]]
+- [[test-ai/Flows|Flows]]
+- [[test-ai/History & Hotspots|History & Hotspots]]
+- [[test-ai/Test Map|Test Map]]
+
+## Pitfalls & rules (memories)
+- Historical lessons [verified]
+- Risks & technical debt [verified]
+
 ## Modules
 - [[test-ai/modules/Class-Level-Defect-Hunters|class-level defect hunters]] — One script per bug family so regressions are caught by category, not by incident report. [inferred]
 - [[test-ai/modules/Deterministic-Domain-Routing-Entity-Resolution|deterministic domain routing + entity resolution]] — Map a question to one of 8 domains and resolve mentioned places/institutions with thresholds instead [inferred]

@@ -15,6 +15,18 @@ tags: [project]
 |---|---|---|---|---|---|---|---|---|
 | 477 | 1324 | 7 | 4 | 362 | 65 | 146 | 9 | 15 (0 stale) |
 
+## Examiner pages
+- [[luma/API Surface|API Surface]]
+- [[luma/Code Map|Code Map]]
+- [[luma/Database|Database]]
+- [[luma/Flows|Flows]]
+- [[luma/History & Hotspots|History & Hotspots]]
+- [[luma/Test Map|Test Map]]
+
+## Pitfalls & rules (memories)
+- Historical lessons [verified]
+- Risks & technical debt [verified]
+
 ## Modules
 - [[luma/modules/Agent-Orchestration-Engine|Agent orchestration engine]] — background worker that claims generation jobs, materializes one AgentRun per council agent, executes [inferred]
 - [[luma/modules/Evaluation-Benchmarks|evaluation & benchmarks]] — mutation-suite evaluator, injection corpus (prompt-injection resistance), regression runner with run [inferred]

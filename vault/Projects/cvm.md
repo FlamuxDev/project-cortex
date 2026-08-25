@@ -15,6 +15,18 @@ tags: [project]
 |---|---|---|---|---|---|---|---|---|
 | 432 | 2761 | 24 | 8 | 539 | 298 | 50 | 13 | 32 (0 stale) |
 
+## Examiner pages
+- [[cvm/API Surface|API Surface]]
+- [[cvm/Code Map|Code Map]]
+- [[cvm/Database|Database]]
+- [[cvm/Flows|Flows]]
+- [[cvm/History & Hotspots|History & Hotspots]]
+- [[cvm/Test Map|Test Map]]
+
+## Pitfalls & rules (memories)
+- Historical lessons [verified]
+- Risks & technical debt [verified]
+
 ## Modules
 - [[cvm/modules/A-B-Experiments-Outcomes|A/B experiments & outcomes]] — deterministic sticky bucketing, control declared first, held-out customers still measured; variants, [strongly_inferred]
 - [[cvm/modules/Analytics-Kpis|analytics & KPIs]] — executive KPIs computed at read time; cohorts, behaviour funnels, trends, affinity, segment overlap, [strongly_inferred]

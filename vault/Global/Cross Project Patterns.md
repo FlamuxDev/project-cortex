@@ -7,7 +7,7 @@ tags: [global]
 
 Concepts appearing in multiple projects.
 
-## Rag — 13 projects
+## Rag — 12 projects
 - [[campify]]: Risks & technical debt
 - [[chat-agent-saas]]: Architecture
 - [[cvm]]: Database
@@ -15,125 +15,117 @@ Concepts appearing in multiple projects.
 - [[iscc-testing]]: Database
 - [[luma]]: Module: storage abstraction inside ai-engine
 
-## Auth — 12 projects
+## Auth — 11 projects
 - [[campify]]: Architecture
-- [[chat-agent-saas]]: Database
+- [[chat-agent-saas]]: Architecture
 - [[cvm]]: Architecture
 - [[iscc-testing]]: Module: botify_agent
 - [[luma]]: API surface
 - [[mawid-ai]]: Architecture
 
-## Audit — 12 projects
+## Audit — 11 projects
 - [[campify]]: Database
-- [[chat-agent-saas]]: Database
+- [[chat-agent-saas]]: Architecture
 - [[cvm]]: Architecture
 - [[iscc-testing]]: Historical lessons
 - [[luma]]: Database
 - [[mawid-ai]]: Risks & technical debt
 
-## Rate Limit — 12 projects
+## Rate Limit — 11 projects
 - [[campify]]: Architecture
-- [[chat-agent-saas]]: Module: Odoo / Dynatrace / Splunk / MCP / channel providers
+- [[chat-agent-saas]]: Module: channels / WhatsApp & messaging integrations
 - [[cvm]]: Risks & technical debt
 - [[luma]]: Module: Express REST service
 - [[mawid-ai]]: Risks & technical debt
-- [[mushagil]]: Risks & technical debt
+- [[mythos]]: Risks & technical debt
 
-## Agent — 11 projects
+## Agent — 10 projects
 - [[campify]]: Historical lessons
 - [[chat-agent-saas]]: Architecture
 - [[iscc-testing]]: Architecture
 - [[luma]]: Database
 - [[mawid-ai]]: Architecture
-- [[mushagil]]: Risks & technical debt
+- [[mythos]]: Architecture
 
-## Migration — 11 projects
+## Migration — 10 projects
 - [[campify]]: Architecture
-- [[chat-agent-saas]]: Database
+- [[chat-agent-saas]]: Architecture
 - [[cvm]]: Database
 - [[iscc-testing]]: Historical lessons
 - [[luma]]: Database
 - [[mawid-ai]]: Architecture
 
-## Queue — 10 projects
+## Queue — 9 projects
 - [[campify]]: Architecture
 - [[chat-agent-saas]]: Architecture
 - [[cvm]]: Architecture
 - [[luma]]: Architecture
 - [[mawid-ai]]: Architecture
-- [[mushagil]]: Architecture
-
-## Worker — 10 projects
-- [[campify]]: Architecture
-- [[chat-agent-saas]]: Architecture
-- [[cvm]]: Architecture
-- [[luma]]: Architecture
-- [[mawid-ai]]: Architecture
-- [[mushagil]]: Architecture
-
-## Webhook — 10 projects
-- [[campify]]: Architecture
-- [[chat-agent-saas]]: Architecture
-- [[cvm]]: Architecture
-- [[mawid-ai]]: Architecture
-- [[mushagil]]: Architecture
 - [[mythos]]: Architecture
 
-## Whatsapp — 9 projects
+## Worker — 9 projects
 - [[campify]]: Architecture
 - [[chat-agent-saas]]: Architecture
+- [[cvm]]: Architecture
+- [[luma]]: Architecture
 - [[mawid-ai]]: Architecture
-- [[mushagil]]: Architecture
+- [[mythos]]: Architecture
+
+## Webhook — 9 projects
+- [[campify]]: Architecture
+- [[chat-agent-saas]]: Architecture
+- [[cvm]]: Architecture
+- [[mawid-ai]]: Architecture
 - [[mythos]]: Architecture
 - [[sham-v2]]: Architecture
 
-## Rls — 8 projects
-- [[campify]]: Architecture
-- [[chat-agent-saas]]: Architecture
-- [[cvm]]: Database
-- [[mawid-ai]]: Architecture
-- [[mushagil]]: Architecture
-- [[mythos]]: Database
-
-## Tenant — 8 projects
+## Whatsapp — 8 projects
 - [[campify]]: Architecture
 - [[chat-agent-saas]]: Database
+- [[mawid-ai]]: Architecture
+- [[mythos]]: Architecture
+- [[sham-v2]]: Architecture
+- [[shamsieh]]: API surface
+
+## Rls — 7 projects
+- [[campify]]: Architecture
+- [[chat-agent-saas]]: Database
+- [[cvm]]: Database
+- [[mawid-ai]]: Architecture
+- [[mythos]]: Database
+- [[telvora]]: Architecture
+
+## Tenant — 7 projects
+- [[campify]]: Architecture
+- [[chat-agent-saas]]: Architecture
 - [[cvm]]: Architecture
 - [[mawid-ai]]: Database
-- [[mushagil]]: Architecture
 - [[mythos]]: Module: Multi-agent work board
+- [[shamsieh]]: Architecture
 
-## Llm — 8 projects
+## Llm — 7 projects
 - [[campify]]: Database
 - [[chat-agent-saas]]: Architecture
 - [[luma]]: Module: Agent orchestration engine
-- [[mushagil]]: Architecture
 - [[mythos]]: Database
 - [[shamsieh]]: Database
+- [[telvora]]: Architecture
 
-## Gemini — 8 projects
+## Gemini — 7 projects
 - [[campify]]: Architecture
 - [[chat-agent-saas]]: Architecture
 - [[luma]]: luma: overview
 - [[mawid-ai]]: Architecture
-- [[mushagil]]: Architecture
 - [[mythos]]: Module: Agent Core (AIAgent + tool orchestration)
+- [[sham-v2]]: Module: ask() pipeline
 
-## Knowledge — 7 projects
+## Knowledge — 6 projects
 - [[chat-agent-saas]]: Architecture
 - [[faraj]]: Module: Locale system & redirect proxy
 - [[iscc-testing]]: Risks & technical debt
 - [[mawid-ai]]: Database
-- [[mushagil]]: Database
 - [[sham-v2]]: Module: query validation & sandboxed execution
-
-## Permission — 7 projects
-- [[campify]]: API surface
-- [[chat-agent-saas]]: Database
-- [[cvm]]: Architecture
-- [[iscc-testing]]: Module: iscc_leave_ext
-- [[mushagil]]: Architecture
-- [[shamsieh]]: shamsieh: overview
+- [[test-ai]]: Risks & technical debt
 
 ## Voice — 6 projects
 - [[chat-agent-saas]]: Architecture
@@ -143,25 +135,25 @@ Concepts appearing in multiple projects.
 - [[shamsieh]]: Module: Botify Agent (protocol v2)
 - [[test-ai]]: Architecture
 
-## Billing — 6 projects
+## Permission — 6 projects
+- [[campify]]: API surface
+- [[chat-agent-saas]]: Architecture
+- [[cvm]]: Architecture
+- [[iscc-testing]]: Module: iscc_leave_ext
+- [[shamsieh]]: shamsieh: overview
+- [[telvora]]: Database
+
+## Billing — 5 projects
 - [[campify]]: Risks & technical debt
-- [[chat-agent-saas]]: Database
+- [[chat-agent-saas]]: Architecture
 - [[mawid-ai]]: Architecture
-- [[mushagil]]: Architecture
 - [[mythos]]: API surface
 - [[telvora]]: Database
 
-## Rbac — 5 projects
-- [[campify]]: API surface
-- [[chat-agent-saas]]: Database
-- [[luma]]: Database
-- [[mushagil]]: Module: Identity, Tenancy, RBAC, Trial & PayPal Billing (M02)
-- [[telvora]]: API surface
-
 ## Payment — 4 projects
 - [[campify]]: Module: commercial limits
+- [[chat-agent-saas]]: Module: billing / plans / quotas
 - [[mawid-ai]]: Architecture
-- [[mushagil]]: Mushagil: overview
 - [[shamsieh]]: Module: hr_loans_advances
 
 ## Odoo — 4 projects
@@ -170,12 +162,16 @@ Concepts appearing in multiple projects.
 - [[shamsieh]]: Architecture
 - [[test-ai]]: Open questions / unverified claims
 
-## Stripe — 3 projects
-- [[chat-agent-saas]]: chat-agent-saas: overview
+## Rbac — 4 projects
+- [[campify]]: API surface
+- [[chat-agent-saas]]: Architecture
+- [[luma]]: Database
+- [[telvora]]: API surface
+
+## Stripe — 2 projects
 - [[mawid-ai]]: Architecture
 - [[mythos]]: Architecture
 
-## Onboarding — 3 projects
+## Onboarding — 2 projects
 - [[mawid-ai]]: Architecture
-- [[mushagil]]: Database
 - [[mythos]]: Tests & commands

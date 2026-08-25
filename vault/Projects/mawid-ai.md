@@ -15,6 +15,18 @@ tags: [project]
 |---|---|---|---|---|---|---|---|---|
 | 379 | 1208 | 16 | 7 | 109 | 92 | 25 | 10 | 24 (0 stale) |
 
+## Examiner pages
+- [[mawid-ai/API Surface|API Surface]]
+- [[mawid-ai/Code Map|Code Map]]
+- [[mawid-ai/Database|Database]]
+- [[mawid-ai/Flows|Flows]]
+- [[mawid-ai/History & Hotspots|History & Hotspots]]
+- [[mawid-ai/Test Map|Test Map]]
+
+## Pitfalls & rules (memories)
+- Historical lessons [verified]
+- Risks & technical debt [verified]
+
 ## Modules
 - [[mawid-ai/modules/Booking-Engine|Booking engine]] — pure-ish business rules for availability and slot-safe writes. [inferred]
 - [[mawid-ai/modules/Client-Api-Layer-Desktop-Mobile-Parity|Client API layer (desktop/mobile parity)]] — single typed client + bearer/refresh auth for desktop & Flutter clients. [inferred]

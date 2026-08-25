@@ -18,3 +18,15 @@ invariants: engine transitions (`start`,`complete`,`fail`…) are UNREACHABLE ov
 pitfalls: a GENERIC transition route once could approve a campaign (commit fac3d6d) — transition-specific routes exist since; stop exists only from paused (deliberate two-step destructive action).
 confidence: verified
 
+## Files (10+)
+
+- `packages/core/src/campaigns/approval.ts`
+- `packages/core/src/campaigns/blockers.ts`
+- `packages/core/src/campaigns/configuration.ts`
+- `packages/core/src/campaigns/fingerprint.ts`
+- `packages/core/src/campaigns/objectives.ts`
+- `packages/core/src/campaigns/objectives.unit.test.ts`
+- `packages/core/src/campaigns/repository.ts`
+- `packages/core/src/campaigns/state.ts`
+- `packages/core/src/campaigns/state.unit.test.ts`
+- `packages/core/src/campaigns/types.ts`

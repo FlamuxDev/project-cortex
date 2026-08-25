@@ -17,3 +17,6 @@ responsibilities: deals reference contacts (single identity record — never res
 invariants: contacts stays the single source of person identity.
 confidence: strongly_inferred
 
+## Files (1+)
+
+- `packages/core/src/crm/repository.ts`

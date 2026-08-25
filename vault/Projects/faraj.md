@@ -15,6 +15,18 @@ tags: [project]
 |---|---|---|---|---|---|---|---|---|
 | 48 | 82 | 5 | 3 | 0 | 0 | 0 | 6 | 13 (0 stale) |
 
+## Examiner pages
+- [[faraj/API Surface|API Surface]]
+- [[faraj/Code Map|Code Map]]
+- [[faraj/Database|Database]]
+- [[faraj/Flows|Flows]]
+- [[faraj/History & Hotspots|History & Hotspots]]
+- [[faraj/Test Map|Test Map]]
+
+## Pitfalls & rules (memories)
+- Historical lessons [verified]
+- Risks & technical debt [verified]
+
 ## Modules
 - [[faraj/modules/Bilingual-Copy-Identity|Bilingual copy & identity]] — all user-facing prose and identity data, type-enforced bilingual. [inferred]
 - [[faraj/modules/Locale-System-Redirect-Proxy|Locale system & redirect proxy]] — locale registry, direction mapping, Accept-Language matching, root redirect. [inferred]

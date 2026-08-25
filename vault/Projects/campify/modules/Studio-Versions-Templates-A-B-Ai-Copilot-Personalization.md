@@ -17,3 +17,21 @@ responsibilities: version history + restore; template application; A/B fingerpri
 invariants: `suggest()` writes nothing; nothing applies model output without a separate audited accept taking text as argument (copilot.ts — property of module shape, not a removable check); content_version immutability enforced by DB trigger (migration 0016/0020); missing-fallback token blanks rather than crashes at send time (submission-time blocker instead).
 confidence: verified
 
+## Files (11+)
+
+- `packages/adapters/ai-gemini/src/index.ts`
+- `packages/adapters/ai-gemini/src/prompt.ts`
+- `packages/adapters/ai-gemini/src/prompt.unit.test.ts`
+- `packages/core/src/content/abTest.ts`
+- `packages/core/src/content/abTest.unit.test.ts`
+- `packages/core/src/content/copilot.ts`
+- `packages/core/src/content/copilot.unit.test.ts`
+- `packages/core/src/content/personalization.ts`
+- `packages/core/src/content/personalization.unit.test.ts`
+- `packages/core/src/content/preview.ts`
+- `packages/core/src/content/repository.ts`
+
+## API surface
+
+- `GET acceptSuggestion`
+- `GET suggestContent`

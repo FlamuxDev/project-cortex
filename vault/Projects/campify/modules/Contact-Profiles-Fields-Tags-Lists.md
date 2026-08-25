@@ -18,3 +18,8 @@ invariants: dedupe on normalized destination; deleteContact writes audit.
 pitfalls: paging past page 1 requires `data:export` permission — deep paging IS an export (apps/api/src/app.ts:897).
 confidence: verified
 
+## Files (3+)
+
+- `packages/core/src/contacts/normalize.ts`
+- `packages/core/src/contacts/normalize.unit.test.ts`
+- `packages/core/src/contacts/repository.ts`

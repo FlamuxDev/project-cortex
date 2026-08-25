@@ -18,3 +18,7 @@ invariants: NODE_ENV required with NO default (a defaulted deploy once booted fa
 pitfalls: adding env reads anywhere else breaks SEC-004 and the audit:security gate.
 confidence: verified
 
+## Files (2+)
+
+- `packages/config/src/index.ts`
+- `packages/config/src/index.unit.test.ts`

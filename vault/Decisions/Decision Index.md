@@ -23,16 +23,23 @@ tags: [decisions]
 - Assumption register A-01..A-09 with revisit triggers (incl. Redis/BullMQ deferred, dev-only tokens until EmailPort) — AR
 
 ## [[chat-agent-saas]]
-- npm workspaces + turbo, not pnpm — brief/task descriptions say pnpm but repo standardizes npm 10.8.0 (root package.json,
-- Split worker tier via START_WORKERS=false rather than separate codebase — same code registers in two entrypoints; tradeo
-- Custom-LLM voice bridge over extending the webhook-tool path — one LLM round trip instead of two, exact text-chat brain 
-- Two translation stores (next-intl marketing / react-i18next dashboard) and two root layouts — deliberate: localePrefix:'
-- No Stripe — custom Subscription rolling-period quotas with notification thresholds — evidence: Subscription/OrgBillingSe
-- Deny-by-default Odoo policy manifest enforced at SOURCE (addon) + API layer, with per-tenant custom-model classification (`7bf8723`)
-- Risk-tiered confirmation gate for custom HTTP actions; deterministic confirmation resolution in BOTH chat and voice turn (`129ea16`)
-- Ship artifacts not builds; refuse destructive migrations; snapshot before deploy; gate on /api/ready — evidence: deploy.
-- Frontends stay Node servers (no standalone output, no static export) for locale routing/redirects/image optimization — e (`7573b92`)
-- Infra-free unit tier vs DB-bound e2e tier naming convention (*.test.ts vs *.e2e.test.ts) — evidence: vitest.config.ts co
+- Zod-at-the-boundary validation** with per-module `*.schemas.ts` and a single `validateBody` middleware; error envelope n
+- String permissions + org-owner bypass** instead of bitfield roles (`shared/constants/permissions.ts` ALL_PERMISSIONS, DE
+- Status-as-plain-strings** across all models (no PG enums) — flexible for the operator-driven state machines (campaigns, 
+- AES-256-GCM envelope via ENCRYPTION_KEY** for every tenant secret at rest (org/agent API keys, MCP headers, channel cred
+- Turborepo+npm workspaces**, shared types package consumed by api/web/widget only (root `package.json`, per-package manif
+- Express monolith + separate worker tier** split by `START_WORKERS`, sized for a ~900MB EC2 box (`ecosystem.config.cjs` h
+- Gemini-first, real multi-provider routing** added later after discovering provider selection was cosmetic (`modelProvide
+- pgvector hybrid retrieval (dense + simple + arabic, RRF k=60)** because dense-only misses exact lexical signals like SKU
+- Verified-identity trust boundary**: `Conversation.externalUserId` documented UNTRUSTED vs `externalIdentityId` VERIFIED;
+- Deny-by-default Odoo op-class permissions** replacing a single boolean, with documented deliberate security downgrade fo
+- Custom-LLM voice path default-on** for new agents to reuse the text-chat brain and halve LLM hops, legacy path kept as a
+- DB-backed SystemConfig with Redis pub/sub invalidation** (values never transit pub/sub — keys only, `config.ts:7-12`); m
+- Per-key circuit breakers for embeddings** after one tenant's bulk ingest tripped a shared breaker (`embeddings.ts:56-63`
+- Sync/async boundaries**: chat turns are synchronous HTTP/SSE end-to-end (no queue hop for the reply — webhook handlers c
+- Early-ack webhook processing** (200 before work) trading at-most-once delivery for Meta retry-friendliness (`webhook-v2.
+- Hardened deploy pipeline** with DROP-guard, snapshot, health gate (`deploy.sh` header citing PRODUCTION_READINESS_PLAN.m
+- Shadow-DOM framework-free widget** (single script tag) and Next.js 16 frontends served by PM2 post-migration (`ecosystem
 
 ## [[cvm]]
 - Modular monolith with enforced boundaries — monorepo risk of module spaghetti — dependency-cruiser 10 rules in CI (`pnpm
@@ -87,21 +94,6 @@ tags: [decisions]
 - Test-enforced OpenAPI without codegen — static public/openapi.json + parity test + CDN Swagger UI page — evidence: commi (`1019517`)
 - Hosted-URL desktop shell (v1) — zero local backend, same cookies/CORS as browser tab; secure token storage deferred to h
 - Cron-as-endpoint with DB-held secret — platform_settings.cron_secret + header auth + 503-if-unconfigured fail-closed pos
-
-## [[mushagil]]
-- Modular monolith, 3 processes, no microservices/K8s/Tailwind/GraphQL/second DB — startup simplicity with strict boundari
-- PostgreSQL as sole truth; Redis only transport; commitment exists only post-commit — MODULES.md §4, DATA_EVENTS.md.
-- Forced RLS + composite tenant FKs + server-derived tenant authority (never body/query/header/model output) — MODULES.md 
-- Central PermissionEvaluator with manifest rows; deny-by-default; nobody grants above own rank; 404-not-403 non-enumerati
-- One transaction = mutation + audit + outbox; provider calls banned inside tx via AsyncLocalStorage guard — transaction-g
-- Per-module DB schema (`business`) instead of piling tables into `platform`; RLS invariant generalized over APP_SCHEMAS l
-- Immutable whole-business JSONB publication snapshots as the only published truth (vs filtering drafts on status) — ADR 0
-- Weekly hours authored as rules + derived week-minute segments with GiST exclusion (overnight = two segments) instead of 
-- M03 ships without remote import despite conditional contract; SSRF surface deliberately nonexistent — ADR 0006.
-- Provider modes {live,sandbox,fake} with production fail-closed refusal — provider-mode.ts, M01 acceptance.
-- Domain subscription states decoupled from PayPal enums; APPROVAL_PENDING/APPROVED ⇒ no local transition — subscription-s
-- Suite registry gated by MODULES.md status so commands never silently match zero tests — scripts/run-suite.mjs, quality/s
-- Raw Fastify encapsulated plugin for the PayPal webhook only (scoped content-type parser) — apps/api/src/main.ts:100–140.
 
 ## [[mythos]]
 - Fork-and-rebrand Hermes as SaaS** — context: wanted productized self-improving agent w/o BYO-keys — decision: fork v0.13 (`027c668`)

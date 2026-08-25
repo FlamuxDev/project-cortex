@@ -17,3 +17,8 @@ responsibilities: campaign starts, message dispatch, journey entries/steps, webh
 invariants: one campaign/job failure doesn't kill the tick; errors logged message-only (pg constraint detail embeds contact PII).
 confidence: verified
 
+## Files (3+)
+
+- `apps/worker/src/container.ts`
+- `apps/worker/src/container.unit.test.ts`
+- `apps/worker/src/main.ts`

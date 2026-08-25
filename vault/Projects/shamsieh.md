@@ -15,6 +15,18 @@ tags: [project]
 |---|---|---|---|---|---|---|---|---|
 | 297 | 1564 | 10 | 4 | 4 | 0 | 23 | 6 | 18 (0 stale) |
 
+## Examiner pages
+- [[shamsieh/API Surface|API Surface]]
+- [[shamsieh/Code Map|Code Map]]
+- [[shamsieh/Database|Database]]
+- [[shamsieh/Flows|Flows]]
+- [[shamsieh/History & Hotspots|History & Hotspots]]
+- [[shamsieh/Test Map|Test Map]]
+
+## Pitfalls & rules (memories)
+- Historical lessons [verified]
+- Risks & technical debt [verified]
+
 ## Modules
 - [[shamsieh/modules/Botify-Agent-Protocol-V2|Botify Agent (protocol v2)]] — Embed the external Botify AI assistant and let it act strictly as the requesting employee, via grant [inferred]
 - [[shamsieh/modules/Crm-Custom-Ext-Project-Custom-Ext-Shams-Todo-Groups|crm_custom_ext / project_custom_ext / shams_todo_groups]] — CRM fields/security/teams/targets/dashboards; project security groups, progress, task templates; Mic [inferred]

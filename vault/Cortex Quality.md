@@ -8,8 +8,8 @@ tags: [quality/cortex]
 
 | Metric | Value |
 |---|---|
-| Sessions started / completed | 10 / 10 |
-| Episodes (active/total) | 9 / 9 |
+| Sessions started / completed | 5 / 5 |
+| Episodes (active/total) | 5 / 5 |
 | Failed-task lessons kept | 0 |
 | Generated memories | 0 |
 | Primary-file hit rate (measured) | None |

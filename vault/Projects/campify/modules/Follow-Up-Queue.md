@@ -18,3 +18,9 @@ invariants: transitions table-driven like campaigns; dashboard rollup aggregates
 pitfalls: independent-review defect pass was needed even here (commit 24d8656).
 confidence: strongly_inferred
 
+## Files (4+)
+
+- `packages/core/src/sales/context.ts`
+- `packages/core/src/sales/repository.ts`
+- `packages/core/src/sales/state.ts`
+- `packages/core/src/sales/state.unit.test.ts`

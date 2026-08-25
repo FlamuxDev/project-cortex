@@ -18,3 +18,11 @@ invariants: only an owner may grant/revoke owner (enforced in changeRole, remove
 pitfalls: global tables (users/sessions) run outside tenant scope by design; auth throttles are tight (signup 5/min) and unauthenticated ones key on req.ip — bites any test minting many accounts (PROGRESS.md M18).
 confidence: verified
 
+## Files (6+)
+
+- `packages/core/src/identity/emails.ts`
+- `packages/core/src/identity/emails.unit.test.ts`
+- `packages/core/src/identity/password.ts`
+- `packages/core/src/identity/rbac.ts`
+- `packages/core/src/identity/rbac.unit.test.ts`
+- `packages/core/src/identity/service.ts`

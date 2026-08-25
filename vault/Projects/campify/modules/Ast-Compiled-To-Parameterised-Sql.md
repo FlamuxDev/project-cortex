@@ -18,3 +18,9 @@ invariants: NO value from the definition is ever concatenated into SQL — hosti
 pitfalls: pathological definitions (199 `not_contains` leaves) ran 56s — statement_timeout (migration 0011) + per-route throttle cap the class (apps/api/src/app.ts:1207).
 confidence: verified
 
+## Files (4+)
+
+- `packages/core/src/segments/ast.ts`
+- `packages/core/src/segments/compile.ts`
+- `packages/core/src/segments/compile.unit.test.ts`
+- `packages/core/src/segments/repository.ts`

@@ -15,6 +15,18 @@ tags: [project]
 |---|---|---|---|---|---|---|---|---|
 | 59 | 89 | 6 | 4 | 0 | 0 | 4 | 8 | 14 (0 stale) |
 
+## Examiner pages
+- [[umbrellaprime/API Surface|API Surface]]
+- [[umbrellaprime/Code Map|Code Map]]
+- [[umbrellaprime/Database|Database]]
+- [[umbrellaprime/Flows|Flows]]
+- [[umbrellaprime/History & Hotspots|History & Hotspots]]
+- [[umbrellaprime/Test Map|Test Map]]
+
+## Pitfalls & rules (memories)
+- Historical lessons [verified]
+- Risks & technical debt [verified]
+
 ## Modules
 - [[umbrellaprime/modules/Client-Form-Validation-Sharing|client form + validation sharing]] — accessible bilingual form posting directly to Lambda. [inferred]
 - [[umbrellaprime/modules/Cloudfront-Function-Local-Twin|CloudFront function & local twin]] — make clean URLs work on exact-key S3; reproduce identically in tests. [inferred]

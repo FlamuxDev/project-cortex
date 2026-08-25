@@ -18,3 +18,34 @@ invariants: every tenant table has workspace_id + ENABLE/FORCE RLS + policy on `
 pitfalls: superuser bypasses RLS even with FORCE; `ON DELETE CASCADE`/FK checks run with RLS disabled — single-column FKs were a real cross-tenant write hole (commit 1e7ead5); concurrent queries on one TenantClient are deprecated by pg — keep sequential (apps/api/src/app.ts:930).
 confidence: verified
 
+## Files (40+)
+
+- `packages/db/migrations/0001_identity.down.sql`
+- `packages/db/migrations/0001_identity.sql`
+- `packages/db/migrations/0002_contacts.down.sql`
+- `packages/db/migrations/0002_contacts.sql`
+- `packages/db/migrations/0003_consent.down.sql`
+- `packages/db/migrations/0003_consent.sql`
+- `packages/db/migrations/0004_imports.down.sql`
+- `packages/db/migrations/0004_imports.sql`
+- `packages/db/migrations/0005_segments.down.sql`
+- `packages/db/migrations/0005_segments.sql`
+- `packages/db/migrations/0006_audit.down.sql`
+- `packages/db/migrations/0006_audit.sql`
+- `packages/db/migrations/0007_composite_tenant_fks.down.sql`
+- `packages/db/migrations/0007_composite_tenant_fks.sql`
+- `packages/db/migrations/0008_auth_audit_and_invites.down.sql`
+- `packages/db/migrations/0008_auth_audit_and_invites.sql`
+- `packages/db/migrations/0009_policy_hardening.down.sql`
+- `packages/db/migrations/0009_policy_hardening.sql`
+- `packages/db/migrations/0010_consent_race_and_self_lookup.down.sql`
+- `packages/db/migrations/0010_consent_race_and_self_lookup.sql`
+- `packages/db/migrations/0011_role_timeouts.down.sql`
+- `packages/db/migrations/0011_role_timeouts.sql`
+- `packages/db/migrations/0012_normalize_suppressions.down.sql`
+- `packages/db/migrations/0012_normalize_suppressions.sql`
+- `packages/db/migrations/0013_suppression_backfill_complete.down.sql`
+
+## API surface
+
+- `GET contacts`

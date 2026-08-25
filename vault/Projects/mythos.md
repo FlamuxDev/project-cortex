@@ -15,6 +15,18 @@ tags: [project]
 |---|---|---|---|---|---|---|---|---|
 | 2022 | 47934 | 15 | 6 | 144 | 33 | 1090 | 9 | 23 (0 stale) |
 
+## Examiner pages
+- [[mythos/API Surface|API Surface]]
+- [[mythos/Code Map|Code Map]]
+- [[mythos/Database|Database]]
+- [[mythos/Flows|Flows]]
+- [[mythos/History & Hotspots|History & Hotspots]]
+- [[mythos/Test Map|Test Map]]
+
+## Pitfalls & rules (memories)
+- Historical lessons [verified]
+- Risks & technical debt [verified]
+
 ## Modules
 - [[mythos/modules/Agent-Core-Aiagent-Tool-Orchestration|Agent Core (AIAgent + tool orchestration)]] — synchronous LLM tool-calling loop, context compression, prompt caching, credential routing. [inferred]
 - [[mythos/modules/Batch-Generation-Rl-Environments|Batch generation & RL environments]] — trajectory generation/compression and Atropos RL training envs (research heritage from Hermes). [inferred]

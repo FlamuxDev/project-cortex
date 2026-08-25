@@ -17,3 +17,6 @@ responsibilities: null=unlimited convention; override-null=inherit-plan resolved
 invariants: no payment gateway by decision — this protects margin only; ceilings changed only with database-owner access (deliberate posture, LAUNCH_READINESS §3).
 confidence: verified
 
+## Files (1+)
+
+- `packages/core/src/plans/repository.ts`

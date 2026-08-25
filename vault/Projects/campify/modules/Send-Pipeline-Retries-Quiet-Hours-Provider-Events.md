@@ -18,3 +18,15 @@ invariants: emergency stop and suppression re-checked AT EXECUTION (claim-time f
 pitfalls: quiet-hours override set only by campaign:approve; test sends exempt from frequency/quota but NOT system rate limit; attribution anchor is messages.sent_at (commit cf88b83 fixed drift).
 confidence: verified
 
+## Files (10+)
+
+- `packages/core/src/delivery/dispatch.ts`
+- `packages/core/src/delivery/idempotency.ts`
+- `packages/core/src/delivery/idempotency.unit.test.ts`
+- `packages/core/src/delivery/providerEventIngest.ts`
+- `packages/core/src/delivery/providerEvents.ts`
+- `packages/core/src/delivery/quietHours.ts`
+- `packages/core/src/delivery/quietHours.unit.test.ts`
+- `packages/core/src/delivery/repository.ts`
+- `packages/core/src/delivery/retry.ts`
+- `packages/core/src/delivery/retry.unit.test.ts`

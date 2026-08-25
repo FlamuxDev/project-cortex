@@ -18,3 +18,14 @@ invariants: preview touches zero contacts; commit applies the previewed plan onl
 pitfalls: 20 MB bodies parsed on the event loop — guarded pre-read + throttled (apps/api/src/app.ts:353); quadratic XLSX parsing was a real outage-class bug.
 confidence: verified
 
+## Files (5+)
+
+- `packages/core/src/imports/commit.ts`
+- `packages/core/src/imports/dryRun.ts`
+- `packages/core/src/imports/import.unit.test.ts`
+- `packages/core/src/imports/sheet.ts`
+- `packages/core/src/imports/xlsx.unit.test.ts`
+
+## API surface
+
+- `GET xl/sharedStrings.xml`

@@ -18,3 +18,8 @@ invariants: no bypass flag exists; relaxing policy is a legal/product decision, 
 pitfalls: consent_supersede's unique key was once occupiable by a foreign-tenant row (the ADR-0010 hole) leaving victims unable to record consent; writes serialized historically due to lock contention (commit 89b8ad2).
 confidence: verified
 
+## Files (3+)
+
+- `packages/core/src/consent/gate.ts`
+- `packages/core/src/consent/gate.unit.test.ts`
+- `packages/core/src/consent/repository.ts`
