@@ -1,45 +1,37 @@
-# Security Review
+# Known Limitations
 
-**Scope:** Project Cortex itself and its effect on the indexed repositories. Date: 2026-08-25.
+Honest list of what Cortex does NOT do well yet, ranked by pain.
 
-## Threat model
-
-Cortex is a local, single-user, read-only-over-repos system. Main risks:
-secrets entering the knowledge base; cortex files leaking repo content; cortex being used
-as an unintended write path into projects.
-
-## Controls in place
-
-1. **Secret redaction at insert time.** Every signature, docstring, commit subject, report body
-   and memory passes `cortex.langs.redact()` before touching SQLite: API keys (`sk-…`), AWS keys,
-   GitHub tokens/PATs, JWTs, PEM private key blocks, `password/secret/api_key/token = "…"` pairs,
-   long base64 blobs → `***REDACTED***`. Tests assert this (`tests/test_cortex.py::test_redaction`).
-2. **`~/Dev/pems` excluded at discovery.** A directory of SSH private keys sits next to the
-   projects; it is hard-excluded (`discovery.EXCLUDED`) and never scanned.
-3. **Read-only against projects.** The indexer opens files for reading and runs `git log/status/
-   rev-parse`. No writes, no formatting, no dependency changes, no commits in project repos.
-   Delegates were instructed read-only and confirmed compliance.
-4. **No network.** Everything local: SQLite, tree-sitter, git, ripgrep.
-5. **Generated-vault hygiene.** Vault notes are markdown derived from the same redacted DB;
-   regeneration never overwrites non-cortex (human) files.
-6. **Env var names, not values.** Reports/config references store names like
-   `Requires DATABASE_URL`; values were never ingested (delegate instructions + redaction net).
-
-## Residual risks (accepted, documented)
-
-- Commit messages authored before this system could contain secrets; they pass through the same
-  redaction, but regexes are not proof against novel formats. DB file itself lives in
-  `~/project-cortex/data/` with normal user-file permissions — treat it as sensitive as your repos.
-- `.env` files are not code extensions so they're not indexed; if a secret leaked into a source
-  *string* it would still hit the redaction patterns above.
-- MCP server binds stdio only — no network surface.
-
-## Verification
-
-```bash
-cd ~/project-cortex && .venv/bin/python -m unittest tests.test_cortex.TestLangs.test_redaction
-rg -l "sk-[A-Za-z0-9]{20}" data/cortex.db || echo "no raw api keys found"
-```
-
-(If you ever suspect contamination: delete `data/cortex.db*` and rebuild — everything is
-regenerable from repos + reports.)
+1. **Symbol-level references are approximate across barrels/re-exports.** `refs` are built from
+   imports + call-name matching. Code that reaches a symbol through index-barrels or dynamic
+   registration can be missed by callers (impact falls back to stem-name matching, which trades
+   false positives for recall). LSP-grade precision would need language servers — deliberately
+   deferred.
+2. **Cross-project ranking is lexical-first.** "How did we implement X elsewhere?" works when X's
+   vocabulary is consistent; synonyms across projects can bury the best evidence below the packet
+   budget. Embeddings remain the documented upgrade path if this matters in practice.
+3. **Dirty worktrees are flagged, not indexed.** Uncommitted files are hashed as-is at update time,
+   but memories verified against HEAD may lag a fast-moving tree (e.g., Mushagil M03 wave).
+   Packets always state dirty counts and brain-behind distances — read them.
+4. **mythos cold index is slow** (~13 min of the 14-min full build; 48k symbols incl. vendored
+   content). Incremental is seconds. A per-language worker pool would parallelize if it ever annoys.
+5. **Route extraction covers common frameworks only** (Express/Fastify/Hono-style calls, NestJS
+   decorators, FastAPI/Flask decorators, Go net/http+gin-style, Next.js file conventions).
+   Unusual routers (e.g., custom registries) appear only via delegate reports.
+6. **Test→target mapping is import-based + filename heuristics.** Tests exercising code via HTTP
+   without importing it map only by naming conventions.
+7. **Arabic support is a glossary bridge, not NLP.** ~40 curated AR→EN term mappings make Arabic
+   tasks hit English code/memories; unlisted vocabulary won't resolve. Extend `AR_EN` in
+   `search.py` as needed.
+8. **Episode quality depends on the lessons agents provide.** Cortex gathers evidence
+   deterministically but never invents root causes; junk lessons fail retrieval relevance
+   and stay dormant rather than polluting packets. Auto-promotion caps at module/pitfall
+   scope; global scope requires an explicit human `cortex episode promote --scope global`.
+9. **Precision metrics need real usage.** Hit-rate dashboards stay n/a below 3 measured
+   implementation tasks (discovery-only and abandoned tasks don't count). The simulated
+   ~94% token benchmark remains labeled simulated until unaided-baseline sessions are logged.
+9. **Windows/macOS untested.** Built and validated on Linux; paths are POSIX-assumed in places.
+10. **Git-worktree detection maps via git-common-dir**; exotic setups (submodules inside indexed paths) may resolve to the parent project.
+11. **The friendly eval was authored in-process** (optimism bias). Counterweights: independent
+    adversarial + hallucination audits ran with repo-level ground truth; their findings drove
+    real fixes. Keep both audits in the loop after major changes.

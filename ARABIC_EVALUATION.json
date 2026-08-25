@@ -1,0 +1,58 @@
+[
+ {
+  "project": "mawid-ai",
+  "task": "وين نظام الحجوزات؟",
+  "pass": true,
+  "tokens": 2640,
+  "evidence_warning": true
+ },
+ {
+  "project": "sham-v2",
+  "task": "وين الشي الي يمنع duplicate requests؟",
+  "pass": true,
+  "tokens": 1136,
+  "evidence_warning": true
+ },
+ {
+  "project": "mushagil",
+  "task": "عدل knowledge base validation",
+  "pass": true,
+  "tokens": 2154,
+  "evidence_warning": true
+ },
+ {
+  "project": "campify",
+  "task": "صلح validation حق campaign",
+  "pass": true,
+  "tokens": 1928,
+  "evidence_warning": false
+ },
+ {
+  "project": "cvm",
+  "task": "وين tenant isolation؟",
+  "pass": true,
+  "tokens": 2221,
+  "evidence_warning": false
+ },
+ {
+  "project": "chat-agent-saas",
+  "task": "غير ال authentication flow تبع login",
+  "pass": true,
+  "tokens": 1342,
+  "evidence_warning": true
+ },
+ {
+  "project": "telvora",
+  "task": "وين ال worker الي يسوي embedding؟",
+  "pass": true,
+  "tokens": 2212,
+  "evidence_warning": true
+ },
+ {
+  "project": "test-ai",
+  "task": "عدل webhook handler حق whatsapp",
+  "pass": true,
+  "tokens": 2070,
+  "evidence_warning": false
+ }
+]

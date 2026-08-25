@@ -13,7 +13,7 @@ tags: [project]
 
 | Files | Symbols | Modules | Flows | APIs | DB | Tests | Decisions | Memories |
 |---|---|---|---|---|---|---|---|---|
-| 598 | 2412 | 11 | 9 | 254 | 97 | 132 | 13 | 19 (0 stale) |
+| 616 | 2489 | 11 | 9 | 282 | 97 | 131 | 13 | 19 (0 stale) |
 
 ## Modules
 - [[mushagil/modules/Background-Worker-Process|Background Worker Process]] — outbox relay, event consumers, scheduled sweeps, DLQ visibility, health endpoints. [verified]

@@ -235,9 +235,25 @@ def _refresh_fts(con, pid):
     if batch:
         con.executemany("INSERT INTO fts_symbols(rowid,name,sig,doc,path) VALUES (?,?,?,?,?)", batch)
     con.execute("DELETE FROM fts_files WHERE rowid IN (SELECT rowid FROM files WHERE project_id=?)", (pid,))
+    from cortex.langs import content_terms
+    prow = con.execute("SELECT path FROM projects WHERE id=?", (pid,)).fetchone()
+    root = pathlib.Path(prow["path"]) if prow else None
     rows = con.execute("SELECT rowid AS rid, path FROM files WHERE project_id=? ORDER BY importance DESC LIMIT 10000", (pid,)).fetchall()
-    con.executemany("INSERT INTO fts_files(rowid,path) VALUES (?,?)",
-                    [(r["rid"], r["path"]) for r in rows])
+    batch = []
+    for r in rows:
+        terms = ""
+        if root is not None:
+            try:
+                raw = (root / r["path"]).read_bytes()[:200000]
+                terms = content_terms(raw.decode("utf-8", "replace"))
+            except OSError:
+                terms = ""
+        batch.append((r["rid"], r["path"], terms))
+        if len(batch) >= FTS_BATCH:
+            con.executemany("INSERT INTO fts_files(rowid,path,terms) VALUES (?,?,?)", batch)
+            batch = []
+    if batch:
+        con.executemany("INSERT INTO fts_files(rowid,path,terms) VALUES (?,?,?)", batch)
     _refresh_memory_fts(con)
 
 

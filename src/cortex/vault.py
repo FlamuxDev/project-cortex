@@ -57,6 +57,7 @@ def project_status(con, pid):
 
 
 def generate(con):
+    from cortex.session import quality_report
     n = {"files": 0}
     projs = [r["id"] for r in con.execute("SELECT id FROM projects ORDER BY id")]
 
@@ -70,8 +71,60 @@ def generate(con):
         lines.append(f"- [[{pid}/Home|{p['name']}]] — {s['files']} files, {s['symbols']} symbols, {fresh}")
     lines += ["", "## Cross-cutting", "- [[Global/Engineering Principles]]",
               "- [[Global/Cross Project Patterns]]", "- [[Decisions/Decision Index]]",
+              "- [[Episodes]]", "- [[Cortex Quality]]", "- [[Knowledge Health]]",
               "", "## Usage", "`cortex context \"<task>\"` · `cortex impact \"<file>\"` · `cortex update`"]
     w(VAULT / "Home.md", "\n".join(lines) + "\n")
+    n["files"] += 1
+
+    # ---- learning loop pages
+    eps = con.execute("""SELECT * FROM episodes ORDER BY id DESC LIMIT 40""").fetchall()
+    body = [fm("Episodes", "[episodes/cortex]"),
+            "# Engineering Episodes", "",
+            "Validated knowledge extracted from completed tasks. Query via "
+            "`cortex episode list` / packets' PAST TASK LESSONS.", ""]
+    for e in eps:
+        flags = []
+        if e["status"] != "active":
+            flags.append(e["status"])
+        if e["outcome"] == "failed":
+            flags.append("FAILED ATTEMPT — do not repeat")
+        tag = f" ({', '.join(flags)})" if flags else ""
+        body.append(f"## {e['task'][:100]}{tag}")
+        body.append(f"`{e['project_id']}` · {e['outcome']} · {e['confidence']}"
+                    + (f" · `{e['commit_sha']}`" if e["commit_sha"] else ""))
+        for k, lbl in (("problem", "Problem"), ("root_cause", "Root cause"),
+                       ("lessons", "Lessons"), ("failed_approaches", "Failed approaches")):
+            if e[k]:
+                body.append(f"- **{lbl}:** {e[k][:400]}")
+        body.append("")
+    w(VAULT / "Episodes.md", "\n".join(body))
+    n["files"] += 1
+
+    q = quality_report(con)
+    body = [fm("Cortex Quality", "[quality/cortex]"),
+            "# Cortex Quality", "",
+            "| Metric | Value |", "|---|---|",
+            f"| Sessions started / completed | {q['sessions_started']} / {q['sessions_completed']} |",
+            f"| Episodes (active/total) | {q['episodes_active']} / {q['episodes_total']} |",
+            f"| Failed-task lessons kept | {q['episodes_failed_lessons']} |",
+            f"| Generated memories | {q['memories_generated']} |",
+            f"| Primary-file hit rate (measured) | {q['primary_file_hit_rate']} |",
+            f"| Suggestion recall (measured) | {q['suggestion_recall']} |",
+            f"| Test-recommendation hit rate | {q['test_hit_rate']} |", ""]
+    w(VAULT / "Cortex Quality.md", "\n".join(body))
+    n["files"] += 1
+
+    stale = con.execute("""SELECT scope, project_id, title FROM memories
+                           WHERE stale=1 OR status IN ('obsolete','uncertain','superseded')
+                           ORDER BY project_id""").fetchall()
+    uncertain_eps = con.execute(
+        "SELECT id, project_id, task FROM episodes WHERE status IN ('uncertain','obsolete')").fetchall()
+    body = [fm("Knowledge Health", "[health/cortex]"),
+            "# Knowledge Health", "", "## Stale / flagged memories"]
+    body += [f"- [{m['scope']}] {m['project_id'] or 'GLOBAL'}: {m['title']}" for m in stale] or ["- none"]
+    body += ["", "## Uncertain/obsolete episodes (contradiction candidates)"]
+    body += [f"- #{e['id']} {e['project_id']}: {e['task'][:90]}" for e in uncertain_eps] or ["- none"]
+    w(VAULT / "Knowledge Health.md", "\n".join(body) + "\n")
     n["files"] += 1
 
     for pid in projs:

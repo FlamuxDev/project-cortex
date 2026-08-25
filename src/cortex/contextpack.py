@@ -10,10 +10,13 @@ from cortex.search import keywords, pathlib_stem
 CHARS_PER_TOKEN = 4
 
 SECTION_PRIORITY = [
-    "HEADER", "MODULE", "PRIMARY FILES", "PRIMARY SYMBOLS", "READ FIRST",
-    "CALLERS / IMPORTERS", "LIKELY IMPACT", "RELATED TESTS", "BUSINESS RULES",
-    "API SURFACE HERE", "DATABASE ENTITIES", "HISTORICAL WARNINGS",
-    "RECENT RELEVANT CHANGES", "DEPENDENCIES", "KNOWLEDGE", "TASK INTERPRETATION",
+    "HEADER", "TASK INTERPRETATION", "LIKELY MODULE", "MODULE", "START HERE",
+    "PRIMARY FILES", "PRIMARY SYMBOLS", "READ FIRST",
+    "IMPORTANT DEPENDENCIES", "DEPENDENCIES", "CALLERS / IMPORTERS",
+    "LIKELY IMPACT", "RULES / INVARIANTS", "BUSINESS RULES",
+    "API SURFACE HERE", "DATABASE ENTITIES", "TESTS TO RUN", "RELATED TESTS",
+    "PAST TASK LESSONS", "HISTORICAL WARNINGS",
+    "RECENT RELEVANT CHANGES", "KNOWLEDGE", "SECONDARY FILES IF NEEDED",
 ]
 
 
@@ -242,11 +245,32 @@ def build_sections(con, pid: str, task: str) -> list[tuple[str, str]]:
             secs.append(("DEPENDENCIES", "\n".join(dep_lines)))
 
     if rule_lines:
+        secs.append(("RULES / INVARIANTS", "\n".join(rule_lines[:6])))
         secs.append(("BUSINESS RULES", "\n".join(rule_lines[:6])))
     if warn_lines:
         secs.append(("KNOWN PITFALLS", "\n".join(warn_lines[:6])))
     if kb_lines:
         secs.append(("KNOWLEDGE", "\n".join(kb_lines[:6])))
+
+    # closed learning loop: relevant episodes from completed tasks
+    try:
+        from cortex.session import relevant_episodes
+        eps = relevant_episodes(con, pid, task)
+        ep_lines = []
+        for ep in eps:
+            tag = f"[{ep['outcome'] or 'done'}"
+            if ep["outcome"] == "failed":
+                tag += " ATTEMPT — do not repeat"
+            tag += f" | {ep['confidence']}]"
+            body = (ep["lessons"] or ep["solution"] or "")[:400]
+            ep_lines.append(f"- {tag} {ep['task'][:90]}\n  {body}")
+        if ep_lines:
+            secs.append(("PAST TASK LESSONS",
+                         "validated knowledge from previous tasks in this project:\n"
+                         + "\n".join(ep_lines)))
+    except Exception:
+        pass
+
     secs.append(("TASK INTERPRETATION", "focus terms: " + ", ".join(keywords(task)[:10])))
     return secs
 
@@ -321,9 +345,26 @@ def context(con, task: str, project_id: str | None = None, budget: int = 4000,
     tl = task.lower()
     if project_id is None and any(c in tl for c in CROSS_CUES):
         return context_cross(con, task, budget)
+    explicit_or_cwd_project = project_id
     pid = project_id or search.detect_project(con, task)
     if not pid:
         return {"error": "could not determine target project; pass project explicitly"}
+    if not explicit_or_cwd_project:
+        # lexical-only guess: require the task to match something real in that project
+        kws = keywords(task)[:8]
+        hit = []
+        for k in kws:
+            hit = con.execute(
+                "SELECT 1 FROM symbols WHERE project_id=? AND (name LIKE ? OR path LIKE ?) LIMIT 1",
+                (pid, f"%{k}%", f"%{k}%")).fetchall()
+            if hit:
+                break
+        if not hit and kws:
+            hit = con.execute("SELECT 1 FROM files WHERE project_id=? AND path LIKE ? LIMIT 1",
+                              (pid, f"%{kws[0]}%")).fetchall()
+        if not hit:
+            return {"error": (f"task matches no evidence in '{pid}' (lexical guess only); "
+                              "pass --project explicitly or run inside the project directory")}
     limit_chars = budget * CHARS_PER_TOKEN
     sections = build_sections(con, pid, task)
 

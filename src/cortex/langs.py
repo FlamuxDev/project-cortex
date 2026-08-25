@@ -28,6 +28,12 @@ SECRET_PATTERNS = [
     (re.compile(r"(-----BEGIN [A-Z ]*PRIVATE KEY-----)[\s\S]*?(-----END [A-Z ]*PRIVATE KEY-----)"), r"\1***REDACTED***\2"),
     (re.compile(r"\b(password|passwd|secret|api[_-]?key|token|access[_-]?key)\b\s*[:=]\s*['\"]([^'\"]{6,})['\"]", re.I),
      r"\1=***REDACTED***"),
+    # unquoted password=hunter22 style
+    (re.compile(r"\b(password|passwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token)\s*[:=]\s*([^\s'\"]{6,})", re.I),
+     r"\1=***REDACTED***"),
+    # creds in URIs: scheme://user:pass@host
+    (re.compile(r"\b[a-z][a-z0-9+.-]*://([^:/\s@]{1,64}):([^@\s/]{3,})@", re.I),
+     r"***REDACTED-CREDS***@"),
     (re.compile(r"([A-Za-z0-9+/]{40,}={0,2})"), lambda m: "***REDACTED-B64***" if len(m.group(1)) > 60 else m.group(1)),
 ]
 
@@ -57,3 +63,23 @@ def is_test(path: str) -> bool:
 
 def ignored_dir(name: str) -> bool:
     return name in IGNORE_DIRS or name.startswith(".") and name not in {".github", ".vscode-extensions"}
+
+
+IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_$]{3,}")
+GENERIC_TERMS = {"const","function","return","export","import","default","string","number",
+                 "boolean","interface","type","class","async","await","value","params","props",
+                 "error","throw","catch","finally","super","this","self","null","true","false",
+                 "static","public","private","readonly","extends","implements","require",
+                 "module","undefined","object","promise","result","data","item","items"}
+
+
+def content_terms(text: str, cap: int = 400) -> str:
+    """Distinct identifiers in a source file, for lexical retrieval over code bodies."""
+    seen: dict[str, None] = {}
+    for m in IDENT_RE.findall(text):
+        w = m.lower()
+        if w not in GENERIC_TERMS and w not in seen:
+            seen[w] = None
+            if len(seen) >= cap:
+                break
+    return " ".join(seen)

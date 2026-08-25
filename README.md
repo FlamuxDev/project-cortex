@@ -78,6 +78,19 @@ rm -f data/cortex.db*
 ln -sf ~/project-cortex/bin/cortex ~/.local/bin/cortex
 ```
 
+## The learning loop
+
+```bash
+cd ~/Dev/my-project
+cortex task start "fix booking validation"     # tracked session + context packet
+cortex impact "src/bookings/service.ts"        # blast radius before risky edits
+# ... implement, test ...
+cortex task complete --session N --outcome tested --lessons "<durable lesson>"
+```
+
+Completed tasks become episodes; relevant lessons resurface in future packets.
+Docs: CORTEX_WORKFLOW.md · TASK_SESSIONS.md · EPISODES.md
+
 ## Daily usage
 
 - Start any task with `cortex context "<task>"` (or let your agent call the MCP tool).

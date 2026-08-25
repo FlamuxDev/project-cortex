@@ -7,18 +7,39 @@ from cortex.db import connect
 from cortex import search
 from cortex.contextpack import context as ctx_fn, impact as impact_fn
 from cortex.indexer import update_project
+from cortex import session as S
 
 CON = connect()
 
 
+def _pid(args):
+    """explicit project > cwd detection (MCP clients spawn us inside the repo)."""
+    try:
+        return S.resolve_project(CON, args.get("project"))
+    except ValueError as e:
+        raise ValueError(str(e))
+
+
 def tool_context(args):
-    r = ctx_fn(CON, args["task"], project_id=args.get("project"),
+    r = ctx_fn(CON, args["task"], project_id=_pid(args),
                budget=int(args.get("budget", 4000)))
     return [{"type": "text", "text": r.get("packet") or r.get("error", "")}]
 
 
+def tool_task_start(args):
+    r = S.task_start(CON, args["task"], project=args.get("project"),
+                     budget=int(args.get("budget", 3000)))
+    if "error" in r:
+        return [{"type": "text", "text": f"error: {r['error']}"}]
+    packet = r.pop("packet")
+    head = [f"SESSION #{r['session_id']} | project={r['project']} | freshness={r['freshness']} "
+            f"| ~{r['tokens_est']} tokens", "",
+            "When done, call cortex_task_complete with this session id and durable lessons.", ""]
+    return [{"type": "text", "text": "\n".join(head) + packet}]
+
+
 def tool_search(args):
-    q, pid = args["query"], args.get("project")
+    q, pid = args["query"], _pid(args)
     out = []
     for kind, fn in [("symbol", search.search_symbols), ("memory", search.search_memories),
                      ("file", search.search_files)]:
@@ -33,12 +54,54 @@ def tool_search(args):
 
 
 def tool_impact(args):
-    r = impact_fn(CON, args["target"], project_id=args.get("project"))
+    r = impact_fn(CON, args["target"], project_id=_pid(args))
+    sid = args.get("session")
+    if "error" not in r and sid:
+        try:
+            S.record_impact(CON, int(sid), args["target"], r)
+        except Exception:
+            pass
+    elif "error" not in r:
+        row = CON.execute("""SELECT id FROM task_sessions WHERE project_id=? AND completed_at IS NULL
+                             ORDER BY id DESC LIMIT 1""", (r.get("project"),)).fetchone()
+        if row:
+            try:
+                S.record_impact(CON, row["id"], args["target"], r)
+            except Exception:
+                pass
     return [{"type": "text", "text": json.dumps(r, indent=1)}]
 
 
+def tool_task_complete(args):
+    try:
+        r = S.task_complete(CON, int(args["session_id"]),
+                            outcome=args.get("outcome", "implemented"),
+                            problem=args.get("problem"),
+                            root_cause=args.get("root_cause"),
+                            lessons=args.get("lessons"),
+                            failed_approaches=args.get("failed_approaches"),
+                            tests_run=args.get("tests_run"),
+                            commit_sha=args.get("commit_sha"))
+    except ValueError as e:
+        return [{"type": "text", "text": f"error: {e}"}]
+    out = {k: v for k, v in r.items() if k != "evidence"}
+    ev = r.get("evidence") or {}
+    lines = [json.dumps(out, indent=1)]
+    for k, v in ev.items():
+        if v:
+            lines.append(f"{k}: {', '.join(map(str, v[:8]))}")
+    return [{"type": "text", "text": "\n".join(lines)}]
+
+
+def tool_quality(args):
+    q = S.quality_report(CON)
+    d = S.decay_check(CON)
+    q.update(d)
+    return [{"type": "text", "text": json.dumps(q, indent=1)}]
+
+
 def tool_module(args):
-    pid = args.get("project") or search.detect_project(CON, args["name"])
+    pid = _pid(args) or search.detect_project(CON, args["name"])
     rows = CON.execute("SELECT * FROM modules WHERE project_id=? AND (slug LIKE ? OR name LIKE ?)",
                        (pid, f"%{args['name']}%", f"%{args['name']}%")).fetchall()
     texts = [f"# {m['name']} [{m['confidence']}] verified@{m['verified_at_commit']}\n{m['body_md']}" for m in rows]
@@ -71,7 +134,7 @@ def tool_references(args):
 
 
 def tool_callers(args):
-    pid = args.get("project") or search.detect_project(CON, args["path"])
+    pid = _pid(args) or search.detect_project(CON, args["path"])
     cl = search.callers_of(CON, pid, args["path"], args.get("symbol"))
     imps = search.importers_of(CON, pid, args["path"])
     lines = [f"calls into {args['path']}:" ] + [f"  {c}" for c in cl] + ["imports it:"] + [f"  {i}" for i in imps]
@@ -79,7 +142,7 @@ def tool_callers(args):
 
 
 def tool_tests(args):
-    pid = args.get("project") or search.detect_project(CON, args["target"])
+    pid = _pid(args) or search.detect_project(CON, args["target"])
     hits = search.tests_for_paths(CON, pid, [args["target"]], limit=15)
     return [{"type": "text", "text": "\n".join(
         f"[{h['kind']}{' DIRECT' if h['direct'] else ''}] {h['path']}" for h in hits) or "no mapped tests"}]
@@ -143,7 +206,15 @@ def tool_changed_since(args):
 
 
 TOOLS = {
-    "cortex_context": ("Budgeted engineering context packet for a natural-language task.",
+    "cortex_task_start": ("Start a tracked task session: auto-detects project from cwd, checks freshness, returns full context packet (module/files/symbols/tests/past lessons). Call this FIRST for any non-trivial task.",
+       {"task": {"type": "string"}, "project": {"type": "string"}, "budget": {"type": "number"}}, tool_task_start, ["task"]),
+    "cortex_task_complete": ("Close a task session: gathers git evidence, computes retrieval precision metrics, stores a durable episode. Pass lessons=root-cause/invariant knowledge worth remembering; outcome in implemented|tested|verified|failed|partial|abandoned.",
+       {"session_id": {"type": "number"}, "outcome": {"type": "string"}, "problem": {"type": "string"},
+        "root_cause": {"type": "string"}, "lessons": {"type": "string"},
+        "failed_approaches": {"type": "string"}, "tests_run": {"type": "array", "items": {"type": "string"}},
+        "commit_sha": {"type": "string"}}, tool_task_complete, ["session_id"]),
+    "cortex_quality": ("Learning-loop health: session/episode counts, hit rates, decay flags.", {}, tool_quality, []),
+    "cortex_context": ("Budgeted engineering context packet for a natural-language task (no session tracking).",
        {"task": {"type": "string"}, "project": {"type": "string"}, "budget": {"type": "number"}}, tool_context, ["task"]),
     "cortex_search": ("Hybrid lexical+graph search across code, symbols and knowledge.",
        {"query": {"type": "string"}, "project": {"type": "string"}}, tool_search, ["query"]),
@@ -171,6 +242,9 @@ TOOLS = {
 
 
 def handle(req: dict) -> dict:
+    if not isinstance(req, dict):
+        return {"jsonrpc": "2.0", "id": None,
+                "error": {"code": -32600, "message": "invalid request: expected object"}}
     method = req.get("method", "")
     rid = req.get("id")
     if method == "initialize":
@@ -189,10 +263,11 @@ def handle(req: dict) -> dict:
             tools_out.append({"name": n, "description": d, "inputSchema": schema})
         return {"jsonrpc": "2.0", "id": rid, "result": {"tools": tools_out}}
     if method == "tools/call":
-        name = req["params"]["name"]
+        name = req.get("params", {}).get("name")
         fn = TOOLS.get(name)
         if not fn:
-            return {"jsonrpc": "2.0", "id": rid, "error": {"code": -32602, "message": f"unknown tool {name}"}}
+            return {"jsonrpc": "2.0", "id": rid,
+                    "error": {"code": -32602, "message": f"unknown tool {name}"}}
         try:
             result = fn[2](req["params"].get("arguments", {}))
             return {"jsonrpc": "2.0", "id": rid, "result": {"content": result}}
@@ -212,7 +287,12 @@ def serve():
             req = json.loads(line)
         except json.JSONDecodeError:
             continue
-        resp = handle(req)
+        try:
+            resp = handle(req)
+        except Exception as e:  # one bad frame must never kill the server
+            rid = req.get("id") if isinstance(req, dict) else None
+            resp = {"jsonrpc": "2.0", "id": rid,
+                    "error": {"code": -32603, "message": f"internal error: {e}"}}
         if resp:
             sys.stdout.write(json.dumps(resp) + "\n")
             sys.stdout.flush()

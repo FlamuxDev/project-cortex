@@ -12,7 +12,7 @@
    "missed": [
     "knowledge.service"
    ],
-   "tokens": 2637,
+   "tokens": 3000,
    "secs": 0.03
   },
   {
@@ -24,8 +24,8 @@
     "knowledge"
    ],
    "missed": [],
-   "tokens": 2282,
-   "secs": 0.02
+   "tokens": 2538,
+   "secs": 0.03
   },
   {
    "project": "campify",
@@ -38,8 +38,8 @@
    "missed": [
     "db.ts"
    ],
-   "tokens": 1760,
-   "secs": 0.01
+   "tokens": 2387,
+   "secs": 0.02
   },
   {
    "project": "campify",
@@ -50,8 +50,8 @@
     "consent"
    ],
    "missed": [],
-   "tokens": 2159,
-   "secs": 0.01
+   "tokens": 2675,
+   "secs": 0.02
   },
   {
    "project": "cvm",
@@ -63,7 +63,7 @@
     "register"
    ],
    "missed": [],
-   "tokens": 1750,
+   "tokens": 2425,
    "secs": 0.02
   },
   {
@@ -77,8 +77,8 @@
    "missed": [
     "app.ts"
    ],
-   "tokens": 2702,
-   "secs": 0.02
+   "tokens": 3000,
+   "secs": 0.03
   },
   {
    "project": "telvora",
@@ -89,8 +89,8 @@
     "ingestion"
    ],
    "missed": [],
-   "tokens": 2016,
-   "secs": 0.02
+   "tokens": 2456,
+   "secs": 0.03
   },
   {
    "project": "telvora",
@@ -103,8 +103,8 @@
    "missed": [
     "realtime"
    ],
-   "tokens": 1818,
-   "secs": 0.02
+   "tokens": 2190,
+   "secs": 0.03
   },
   {
    "project": "chat-agent-saas",
@@ -115,7 +115,7 @@
     "voice"
    ],
    "missed": [],
-   "tokens": 2365,
+   "tokens": 2805,
    "secs": 0.03
   },
   {
@@ -128,7 +128,7 @@
     "export"
    ],
    "missed": [],
-   "tokens": 2696,
+   "tokens": 3000,
    "secs": 0.03
   },
   {
@@ -140,8 +140,8 @@
     "dedupe"
    ],
    "missed": [],
-   "tokens": 1769,
-   "secs": 0.01
+   "tokens": 2280,
+   "secs": 0.02
   },
   {
    "project": "mawid-ai",
@@ -152,8 +152,8 @@
     "gemini"
    ],
    "missed": [],
-   "tokens": 1724,
-   "secs": 0.01
+   "tokens": 2532,
+   "secs": 0.02
   },
   {
    "project": "luma",
@@ -165,8 +165,8 @@
     "queue"
    ],
    "missed": [],
-   "tokens": 1793,
-   "secs": 0.02
+   "tokens": 2203,
+   "secs": 0.03
   },
   {
    "project": "sham-v2",
@@ -178,7 +178,7 @@
     "agent"
    ],
    "missed": [],
-   "tokens": 2304,
+   "tokens": 2939,
    "secs": 0.01
   },
   {
@@ -191,7 +191,7 @@
     "s3"
    ],
    "missed": [],
-   "tokens": 927,
+   "tokens": 1701,
    "secs": 0.01
   },
   {
@@ -204,7 +204,7 @@
     "attendance"
    ],
    "missed": [],
-   "tokens": 1829,
+   "tokens": 2191,
    "secs": 0.01
   },
   {
@@ -217,7 +217,7 @@
     "deduction"
    ],
    "missed": [],
-   "tokens": 1812,
+   "tokens": 2353,
    "secs": 0.01
   },
   {
@@ -230,7 +230,7 @@
     "skill"
    ],
    "missed": [],
-   "tokens": 1498,
+   "tokens": 1938,
    "secs": 0.08
   },
   {
@@ -242,7 +242,7 @@
     "form"
    ],
    "missed": [],
-   "tokens": 1512,
+   "tokens": 2237,
    "secs": 0.01
   },
   {
@@ -255,8 +255,8 @@
     "component"
    ],
    "missed": [],
-   "tokens": 719,
-   "secs": 0.0
+   "tokens": 1091,
+   "secs": 0.01
   }
  ]
 }

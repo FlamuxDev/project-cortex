@@ -159,12 +159,17 @@ def tests_for_paths(con, project_id: str, paths: list[str], limit=15):
         name_hit = any(
             pathlib_stem(p) in stem or pathlib_stem(stem).replace(".test", "").replace(".spec", "") in p
             for p in paths)
-        if direct or name_hit:
-            hits.append({"path": t["path"], "name": t["name"], "kind": t["kind"],
-                         "direct": direct})
-        if len(hits) >= limit:
-            break
-    return hits
+        if not (direct or name_hit):
+            continue
+        # same directory/package as the changed code beats distant lookalikes
+        samedir = any("/" in t["path"] and t["path"].rsplit("/", 1)[0] == p.rsplit("/", 1)[0]
+                      for p in paths)
+        hits.append({"path": t["path"], "name": t["name"], "kind": t["kind"],
+                     "direct": direct, "_samedir": samedir})
+    hits.sort(key=lambda h: (not (h["_samedir"] and h.get("direct")), not h["direct"],
+                             not h["_samedir"]))
+    out = [{k: v for k, v in h.items() if k != "_samedir"} for h in hits[:limit]]
+    return out
 
 
 def pathlib_stem(p: str) -> str:

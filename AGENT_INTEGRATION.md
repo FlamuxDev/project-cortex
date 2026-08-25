@@ -2,7 +2,8 @@
 
 ## The 30-second rule for any coding agent
 
-Drop this block into your project instructions (CLAUDE.md / AGENTS.md / system prompt):
+This block is ALREADY integrated into every project under ~/Dev
+(marker `<!-- project-cortex:v1 -->`). Reference copy:
 
 ```markdown
 ## Project Cortex
@@ -45,7 +46,10 @@ args = ["serve"]
 
 | You need | Tool |
 |---|---|
-| Task briefing under a token budget | `cortex_context {task, project?, budget?}` |
+| **Start any non-trivial task** | `cortex_task_start {task, project?, budget?}` — tracked session, auto-detects project from cwd |
+| Close a task + record lessons | `cortex_task_complete {session_id, outcome?, problem?, root_cause?, lessons?, tests_run?}` |
+| Learning-loop health | `cortex_quality` |
+| Task briefing under a token budget (no tracking) | `cortex_context {task, project?, budget?}` |
 | Cross-project ("have we done X elsewhere") | same tool — phrasing like "across projects" auto-triggers |
 | Locate code lexically | `cortex_search {query, project?}` |
 | Definition of a named symbol | `cortex_symbol {name, project?}` |

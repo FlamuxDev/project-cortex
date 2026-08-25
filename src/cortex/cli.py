@@ -72,13 +72,14 @@ def cmd_context(args):
         from cortex.contextpack import context_cross
         print(context_cross(con, args.task, budget=args.budget)["packet"])
         return
-    print(context_text(con, args.task, project_id=args.project,
-                       budget=args.budget))
+    pid = _proj(con, args)
+    print(context_text(con, args.task, project_id=pid,
+                       budget=_budget(args.budget)))
 
 
 def cmd_search(args):
     con = connect()
-    pid = args.project or search.detect_project(con, args.query)
+    pid = _proj(con, args) or search.detect_project(con, args.query)
     for kind, fn in [("symbol", search.search_symbols), ("memory", search.search_memories),
                      ("file", search.search_files)]:
         rows = fn(con, pid, args.query, limit=args.limit)
@@ -95,7 +96,7 @@ def cmd_search(args):
 
 def cmd_module(args):
     con = connect()
-    pid = args.project or search.detect_project(con, args.name)
+    pid = _proj(con, args) or search.detect_project(con, args.name)
     row = con.execute("SELECT * FROM modules WHERE project_id=? AND (slug LIKE ? OR name LIKE ?)",
                       (pid, f"%{args.name}%", f"%{args.name}%")).fetchone()
     if not row:
@@ -109,9 +110,19 @@ def cmd_module(args):
 
 def cmd_impact(args):
     con = connect()
-    r = impact_fn(con, args.target, project_id=args.project)
+    pid = _proj(con, args)
+    r = impact_fn(con, args.target, project_id=pid)
     if "error" in r:
         print(r["error"]); return
+    # attach to the most recent open session for this project (telemetry)
+    try:
+        from cortex import session as S
+        row = con.execute("""SELECT id FROM task_sessions WHERE project_id=? AND completed_at IS NULL
+                             ORDER BY id DESC LIMIT 1""", (pid,)).fetchone()
+        if row:
+            S.record_impact(con, row["id"], args.target, r)
+    except Exception:
+        pass
     print(f"PROJECT: {r['project']}\nTARGETS: {', '.join(r['targets'])}")
     print(f"MODULE:  {r['module']}\nRISK:    {r['risk'].upper()}  ({'; '.join(r['reasons']) or 'isolated'})")
     if r["direct_dependents"]:
@@ -136,15 +147,18 @@ def cmd_impact(args):
 
 def cmd_update(args):
     con = connect()
+    from cortex.session import decay_check
     if args.project:
         stats = indexer.update_project(con, args.project)
         print(args.project, stats)
+        print("decay:", decay_check(con, args.project))
     else:
         for proj in indexer.discover_projects():
             try:
                 print(proj["id"], indexer.update_project(con, proj["id"]))
             except Exception as e:
                 print(proj["id"], "ERROR", e)
+        print("decay:", decay_check(con))
 
 
 def cmd_index(args):
@@ -156,7 +170,7 @@ def cmd_index(args):
 
 def cmd_tests(args):
     con = connect()
-    pid = args.project or search.detect_project(con, args.target)
+    pid = _proj(con, args) or search.detect_project(con, args.target)
     hits = search.tests_for_paths(con, pid, [args.target], limit=20)
     for h in hits:
         print(f"[{h['kind']}{' DIRECT' if h['direct'] else ''}] {h['path']}")
@@ -166,7 +180,7 @@ def cmd_tests(args):
 
 def cmd_history(args):
     con = connect()
-    pid = args.project or search.detect_project(con, " ".join(args.target or []))
+    pid = _proj(con, args) or search.detect_project(con, " ".join(args.target or []))
     if args.target:
         rows = search.recent_commits(con, pid, paths=[args.target[0]], limit=args.limit)
     else:
@@ -204,6 +218,47 @@ def cmd_doctor(args):
                           (SELECT 1 FROM files f WHERE f.project_id=r.project_id AND f.path=r.dst_path)""").fetchone()["c"]
     if orph > 200:
         issues.append(f"GRAPH: {orph} refs point at unindexed files (resolver drift)")
+    # migrations applied?
+    try:
+        con.execute("SELECT id FROM task_sessions LIMIT 1").fetchone()
+        con.execute("SELECT derived_from FROM memories LIMIT 1").fetchone()
+    except Exception:
+        issues.append("MIGRATIONS: learning-loop schema missing")
+    # secret redaction live check
+    from cortex.langs import redact
+    if "hunter22" in redact("password: 'hunter22'"):
+        issues.append("REDACTION: pattern check failed — do not persist until fixed")
+    # MCP protocol round-trip (real subprocess, real JSON-RPC)
+    try:
+        import json as _json, subprocess as _sp
+        srv = _sp.Popen([sys.executable, str(pathlib.Path(__file__).parent / "mcp_server.py")],
+                        stdin=_sp.PIPE, stdout=_sp.PIPE, stderr=_sp.DEVNULL, text=True)
+        def rpc(obj):
+            srv.stdin.write(_json.dumps(obj) + "\n"); srv.stdin.flush()
+            return _json.loads(srv.stdout.readline())
+        hello = rpc({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                     "params": {"protocolVersion": "2024-11-05"}})
+        tools = rpc({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+        call = rpc({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                    "params": {"name": "cortex_projects", "arguments": {}}})
+        ok = (hello.get("result", {}).get("serverInfo", {}).get("name") == "project-cortex"
+              and any(t["name"] == "cortex_context" for t in tools.get("result", {}).get("tools", []))
+              and "content" in call.get("result", {}))
+        srv.terminate()
+        if not ok:
+            issues.append("MCP: protocol round-trip failed (initialize/tools/call)")
+    except Exception as e:
+        issues.append(f"MCP: self-test error: {e}")
+    # learning loop
+    from cortex.session import decay_check, quality_report
+    d = decay_check(con)
+    q = quality_report(con)
+    if d["obsolete_marked"] or d["uncertain_marked"]:
+        issues.append(f"DECAY: {d['obsolete_marked']} episodes -> obsolete, "
+                      f"{d['uncertain_marked']} -> uncertain (evidence changed)")
+    if q["episodes_obsolete"] + q["episodes_uncertain"] > 0:
+        print(f"info: {q['episodes_obsolete']} obsolete + {q['episodes_uncertain']} uncertain episodes; "
+              f"review with `cortex episode list`")
     print("\n".join(issues) if issues else "all checks passed")
 
 
@@ -212,13 +267,127 @@ def cmd_serve(args):
     serve()
 
 
+BUDGETS = {"small": 2000, "normal": 4000, "deep": 8000}
+
+
+def _budget(v) -> int:
+    if isinstance(v, str) and v.lower() in BUDGETS:
+        return BUDGETS[v.lower()]
+    try:
+        return max(300, min(20000, int(v)))
+    except (TypeError, ValueError):
+        return BUDGETS["normal"]
+
+
+# ---------- learning loop ----------
+
+def _proj(con, args) -> str | None:
+    """Explicit --project > cwd detection. Exits with candidates on ambiguity."""
+    from cortex.session import resolve_project
+    try:
+        pid = resolve_project(con, getattr(args, "project", None))
+    except ValueError as e:
+        print(f"AMBIGUOUS: {e}")
+        raise SystemExit(2)
+    return pid
+
+
+def cmd_task(args):
+    from cortex import session as S
+    con = connect()
+    try:
+        _run_task(args, S, con)
+    except ValueError as e:
+        print("ERROR:", e)
+        raise SystemExit(2)
+
+
+def _run_task(args, S, con):
+    if args.op == "start":
+        r = S.task_start(con, args.task, project=args.project, budget=_budget(args.budget))
+        if "error" in r:
+            raise ValueError(r["error"])
+        print(f"SESSION #{r['session_id']}  project={r['project']}  freshness={r['freshness']}  ~{r['tokens_est']} tokens")
+        print(r["packet"])
+        print(f"\n[hint] when done: cortex task complete --session {r['session_id']} --outcome tested "
+              f"--lessons \"...\"")
+    elif args.op == "complete":
+        s = S.get_session(con, args.session)
+        pid = s["project_id"]
+        import subprocess
+        sha = None
+        head = subprocess.run(["git", "-C", con.execute("SELECT path FROM projects WHERE id=?", (pid,)).fetchone()[0],
+                               "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        dirty = subprocess.run(["git", "-C", con.execute("SELECT path FROM projects WHERE id=?", (pid,)).fetchone()[0],
+                                "status", "--porcelain"], capture_output=True, text=True).stdout
+        if not dirty and head:
+            sha = head[:12]
+        r = S.task_complete(con, args.session, outcome=args.outcome,
+                            problem=args.problem, root_cause=args.root_cause,
+                            lessons=" ".join(args.lessons) if args.lessons else None,
+                            failed_approaches=" ".join(args.failed_approach) if args.failed_approach else None,
+                            solution=" ".join(args.solution) if getattr(args, "solution", None) else None,
+                            tests_run=args.tests_run.split(",") if args.tests_run else None,
+                            commit_sha=sha)
+        print(json.dumps({k: v for k, v in r.items() if k != "evidence"}, indent=1))
+        ev = r.get("evidence") or {}
+        for k, v in ev.items():
+            if v:
+                print(f"{k}: {', '.join(map(str, v[:8]))}")
+        if not sha:
+            print("note: working tree dirty / no explicit commit — episode recorded without commit link")
+    elif args.op == "list":
+        for s in con.execute("SELECT id,project_id,outcome,substr(task,1,70) t,started_at FROM task_sessions ORDER BY id DESC LIMIT 20"):
+            print(f"#{s['id']:4} {s['project_id'] or '?':14} {s['outcome'] or 'open':12} ep:{s['episode_id'] or '-':5} {s['t']}")
+    elif args.op == "show":
+        s = S.get_session(con, args.session)
+        for k in s.keys():
+            v = s[k]
+            if v not in (None, ""):
+                print(f"{k}: {str(v)[:300]}")
+        if s["episode_id"]:
+            ep = con.execute("SELECT * FROM episodes WHERE id=?", (s["episode_id"],)).fetchone()
+            print("\n--- EPISODE ---")
+            for k in ("task", "problem", "root_cause", "solution", "failed_approaches",
+                      "lessons", "commit_sha", "status", "outcome", "confidence"):
+                if ep[k]:
+                    print(f"{k}: {ep[k][:400]}")
+
+
+def cmd_episode(args):
+    from cortex import session as S
+    con = connect()
+    if args.op == "list":
+        for e in con.execute("SELECT id,project_id,status,outcome,confidence,substr(task,1,60) t FROM episodes ORDER BY id DESC LIMIT 30"):
+            print(f"#{e['id']:4} {e['project_id'] or 'GLOBAL':14} {e['status']:10} {e['outcome'] or '-':12} {e['confidence']:16} {e['t']}")
+    elif args.op == "supersede":
+        S.supersede_episode(con, args.id, args.by, status=args.status)
+        print(f"episode #{args.id} -> {args.status}" + (f" (by #{args.by})" if args.by else ""))
+    elif args.op == "promote":
+        mid = S.promote_episode(con, args.id, scope=args.scope)
+        print(f"promoted to memory #{mid}" if mid else "not promoted (no lessons or duplicate knowledge)")
+
+
+def cmd_quality(args):
+    from cortex.session import quality_report
+    q = quality_report(connect())
+    print(f"Cortex Quality")
+    print(f"sessions started/completed : {q['sessions_started']} / {q['sessions_completed']}")
+    print(f"episodes active/total      : {q['episodes_active']} / {q['episodes_total']}"
+          f"  (failed-lesson {q['episodes_failed_lessons']}, uncertain {q['episodes_uncertain']}, obsolete {q['episodes_obsolete']})")
+    print(f"generated memories         : {q['memories_generated']}   stale memories: {q['stale_memories']}")
+    fmt = lambda v: f"{v:.0%}" if isinstance(v, float) else "n/a"
+    print(f"primary-file hit rate      : {fmt(q['primary_file_hit_rate'])}   suggestion recall: {fmt(q['suggestion_recall'])}")
+    print(f"test-recommendation hit    : {fmt(q['test_hit_rate'])}")
+
+
 def main():
     ap = argparse.ArgumentParser(prog="cortex", description="Project Cortex — engineering brain")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("projects").set_defaults(fn=cmd_projects)
     sp = sub.add_parser("status"); sp.add_argument("task", nargs="?"); sp.add_argument("--project"); sp.set_defaults(fn=cmd_status)
-    sp = sub.add_parser("context"); sp.add_argument("task"); sp.add_argument("--project"); sp.add_argument("--budget", type=int, default=4000); sp.add_argument("--all", action="store_true"); sp.set_defaults(fn=cmd_context)
+    sp = sub.add_parser("context"); sp.add_argument("task"); sp.add_argument("--project"); sp.add_argument("--budget", default=4000); sp.add_argument("--all", action="store_true"); sp.set_defaults(fn=cmd_context)
     sp = sub.add_parser("search"); sp.add_argument("query"); sp.add_argument("--project"); sp.add_argument("--limit", type=int, default=8); sp.set_defaults(fn=cmd_search)
     sp = sub.add_parser("module"); sp.add_argument("name"); sp.add_argument("--project"); sp.set_defaults(fn=cmd_module)
     sp = sub.add_parser("impact"); sp.add_argument("target"); sp.add_argument("--project"); sp.set_defaults(fn=cmd_impact)
@@ -228,6 +397,16 @@ def main():
     sp = sub.add_parser("history"); sp.add_argument("target", nargs="*"); sp.add_argument("--project"); sp.add_argument("--limit", type=int, default=15); sp.set_defaults(fn=cmd_history)
     sub.add_parser("doctor").set_defaults(fn=cmd_doctor)
     sub.add_parser("serve").set_defaults(fn=cmd_serve)
+    sp = sub.add_parser("quality").set_defaults(fn=cmd_quality)
+    sp = sub.add_parser("task"); tsub = sp.add_subparsers(dest="op", required=True)
+    ts = tsub.add_parser("start"); ts.add_argument("task"); ts.add_argument("--project"); ts.add_argument("--budget", default=3000); ts.set_defaults(fn=cmd_task)
+    tc = tsub.add_parser("complete"); tc.add_argument("--session", type=int, required=True); tc.add_argument("--outcome", default="implemented", choices=["implemented", "tested", "verified", "failed", "partial", "abandoned"]); tc.add_argument("--problem"); tc.add_argument("--root-cause", dest="root_cause"); tc.add_argument("--lessons", nargs="+"); tc.add_argument("--failed-approach", dest="failed_approach", nargs="+"); tc.add_argument("--solution", nargs="+"); tc.add_argument("--tests-run", dest="tests_run"); tc.add_argument("--project"); tc.set_defaults(fn=cmd_task)
+    tl = tsub.add_parser("list"); tl.set_defaults(fn=cmd_task)
+    tw = tsub.add_parser("show"); tw.add_argument("session", type=int); tw.set_defaults(fn=cmd_task)
+    sp = sub.add_parser("episode"); esub = sp.add_subparsers(dest="op", required=True)
+    el = esub.add_parser("list"); el.set_defaults(fn=cmd_episode)
+    esu = esub.add_parser("supersede"); esu.add_argument("id", type=int); esu.add_argument("--by", type=int); esu.add_argument("--status", default="superseded", choices=["superseded", "obsolete", "uncertain", "active"]); esu.set_defaults(fn=cmd_episode)
+    epr = esub.add_parser("promote"); epr.add_argument("id", type=int); epr.add_argument("--scope", choices=["global", "module", "pitfall"]); epr.set_defaults(fn=cmd_episode)
 
     args = ap.parse_args()
     args.fn(args)
