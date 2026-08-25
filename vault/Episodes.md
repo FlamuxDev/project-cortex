@@ -10,6 +10,10 @@ Validated knowledge extracted from completed tasks. Query via `cortex episode li
 
 ## عدل نظام الحجوزات بحيث نتجنب duplicate creation
 `mushagil` · partial · inferred
+- **Lessons:** Idempotency checks for booking creation belong in business-capacity BookingPolicyService before any state transition.
+
+## عدل نظام الحجوزات بحيث نتجنب duplicate creation
+`mushagil` · partial · inferred
 - **Problem:** duplicate booking creation when clients retry
 - **Root cause:** booking policy service has no idempotency guard; retry path re-enters create
 - **Lessons:** Booking dedupe must live in the business-capacity module: BookingPolicyService + policies.controller own draft/publish state machines, so any idempotency key check belongs there before state transition. Never retry create without a client request fingerprint.

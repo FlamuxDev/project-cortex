@@ -337,7 +337,7 @@ def _run_task(args, S, con):
         if not sha:
             print("note: working tree dirty / no explicit commit — episode recorded without commit link")
     elif args.op == "list":
-        for s in con.execute("SELECT id,project_id,outcome,substr(task,1,70) t,started_at FROM task_sessions ORDER BY id DESC LIMIT 20"):
+        for s in con.execute("SELECT id,project_id,outcome,episode_id,substr(task,1,70) t,started_at FROM task_sessions ORDER BY id DESC LIMIT 20"):
             print(f"#{s['id']:4} {s['project_id'] or '?':14} {s['outcome'] or 'open':12} ep:{s['episode_id'] or '-':5} {s['t']}")
     elif args.op == "show":
         s = S.get_session(con, args.session)

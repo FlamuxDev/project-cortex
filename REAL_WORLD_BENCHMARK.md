@@ -13,12 +13,12 @@ Baseline (no-cortex discovery cost) is NOT fabricated: until we log unaided sess
 
 | Metric | Value |
 |---|---|
-| Tasks measured | 9 |
+| Tasks measured | 10 |
 | Median context packet | 7,999 chars (~1,999 tokens) |
 | Primary-file hit rate | None |
 | Suggestion recall | None |
 | Test-recommendation hit rate | None |
-| Episodes captured | 8 active / 8 total |
+| Episodes captured | 9 active / 9 total |
 
 ## Per-task log
 
@@ -33,3 +33,4 @@ Baseline (no-cortex discovery cost) is NOT fabricated: until we log unaided sess
 | #7 | mushagil | abandoned | - | - | - | - | 1,330 |
 | #8 | mushagil | partial | 10 | 0 | 0.0 | None | 2,599 |
 | #9 | mushagil | abandoned | 10 | 0 | 0.0 | None | 1,999 |
+| #10 | mushagil | partial | 10 | 0 | 0.0 | None | 1,999 |
