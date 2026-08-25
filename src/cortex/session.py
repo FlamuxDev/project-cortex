@@ -360,8 +360,8 @@ def promote_episode(con, episode_id: int, scope: str | None = None) -> int | Non
     if scope is None:
         scope = "module" if ep["module_slugs_json"] and ep["module_slugs_json"] != "[]" else "pitfall"
     # episodes are single-project facts: global requires an explicit human decision
-    # dedup only against memories of the SAME project+scope — a telvora lesson must not
-    # suppress a mushagil one
+    # dedup only against memories of the SAME project+scope — a lesson from one
+    # repo must never suppress a distinct lesson from another
     for mem in con.execute("SELECT id,title,body_md FROM memories WHERE COALESCE(project_id,'')=? "
                            "AND scope=?", (ep["project_id"] or "", scope)):
         have = set(search.keywords(mem["title"] + " " + mem["body_md"]))

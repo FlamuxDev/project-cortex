@@ -219,7 +219,7 @@ def build_sections(con, pid: str, task: str) -> list[tuple[str, str]]:
                      f"risk={risk} ({'; '.join(why) or 'isolated'})" +
                      ("\nindirectly touched:\n" + "\n".join(impact_files[:10]) if impact_files else "")))
         if tests:
-            secs.append(("RELATED TESTS", "\n".join(
+            secs.append(("TESTS TO RUN", "\n".join(
                 f"{t['path']} ({t['kind']}{' DIRECT' if t['direct'] else ''})" for t in tests)))
         if apis:
             secs.append(("API SURFACE HERE", "\n".join(

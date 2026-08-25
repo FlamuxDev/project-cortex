@@ -1,6 +1,6 @@
 """Cortex CLI."""
 from __future__ import annotations
-import argparse, json, pathlib, sys
+import argparse, json, pathlib, shutil, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from cortex.db import connect
@@ -262,6 +262,48 @@ def cmd_doctor(args):
     print("\n".join(issues) if issues else "all checks passed")
 
 
+def cmd_init(args):
+    """Register a repo (or a directory of repos) with cortex and index it."""
+    from cortex import discovery
+    target = pathlib.Path(args.path).expanduser().resolve()
+    if not target.is_dir():
+        print(f"not a directory: {target}")
+        raise SystemExit(2)
+    cfg = discovery.load_config()
+    roots: list[str] = cfg.setdefault("roots", [])
+    if str(target) not in roots:
+        roots.append(str(target))
+    discovery.save_config(cfg)
+
+    con = connect()
+    projs = indexer.discover_projects()
+    mine = [p for p in projs if str(target) == p["path"] or
+            p["path"].startswith(str(target) + "/")]
+    if not mine:
+        print(f"no indexable projects found under {target} "
+              "(need >=3 code files; check config excludes)")
+        return
+    for proj in mine:
+        stats = indexer.index_project(con, proj, full=True)
+        print(f"indexed {proj['id']}: {stats}")
+
+    exe = shutil.which("cortex") or str(pathlib.Path(__file__).resolve())
+    print(
+        f"\n✓ {len(mine)} project(s) registered. Root saved to "
+        f"{discovery.cortex_home() / 'config.json'}\n"
+        "\nNext steps:\n"
+        f"  cortex context \"<task>\"          # run inside any indexed repo\n"
+        f"  cortex serve                      # MCP server\n\n"
+        "Wire your agents (paths resolved to this install):\n"
+        f'  Claude Code : claude mcp add --scope user cortex -- {exe} serve\n'
+        f'  Codex       : add to ~/.codex/config.toml:\n'
+        f'                  [mcp_servers.cortex]\n'
+        f'                  command = "{exe}"\n'
+        f'                  args = ["serve"]\n'
+        f'  OpenCode    : ~/.config/opencode/opencode.json ->\n'
+        f'                {{"mcp": {{"cortex": {{"type": "local", "command": ["{exe}", "serve"], "enabled": true}}}}}}\n')
+
+
 def cmd_serve(args):
     from cortex.mcp_server import serve
     serve()
@@ -386,6 +428,7 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("projects").set_defaults(fn=cmd_projects)
+    sp = sub.add_parser("init", help="register a repo (or dir of repos) and index it"); sp.add_argument("path"); sp.set_defaults(fn=cmd_init)
     sp = sub.add_parser("status"); sp.add_argument("task", nargs="?"); sp.add_argument("--project"); sp.set_defaults(fn=cmd_status)
     sp = sub.add_parser("context"); sp.add_argument("task"); sp.add_argument("--project"); sp.add_argument("--budget", default=4000); sp.add_argument("--all", action="store_true"); sp.set_defaults(fn=cmd_context)
     sp = sub.add_parser("search"); sp.add_argument("query"); sp.add_argument("--project"); sp.add_argument("--limit", type=int, default=8); sp.set_defaults(fn=cmd_search)

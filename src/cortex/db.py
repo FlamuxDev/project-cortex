@@ -1,9 +1,11 @@
 """SQLite database layer with migration runner."""
 import sqlite3, pathlib, importlib.resources
 
+import os
 MIGRATIONS_DIR = pathlib.Path(__file__).parent / "migrations"
 CORTEX_ROOT = pathlib.Path(__file__).resolve().parents[2]
-DEFAULT_DB = CORTEX_ROOT / "data" / "cortex.db"
+DEFAULT_DB = pathlib.Path(
+    os.environ.get("CORTEX_DATA_DIR", CORTEX_ROOT / "data" / "cortex.db"))
 
 
 def connect(db_path: pathlib.Path | str | None = None) -> sqlite3.Connection:
