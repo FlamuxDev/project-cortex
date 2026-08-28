@@ -4,8 +4,9 @@ import math, re, sys, pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from cortex import search
-import re
 from cortex.search import keywords, pathlib_stem
+from cortex.db import code_root
+from cortex.session import live_git
 
 CHARS_PER_TOKEN = 4
 
@@ -38,21 +39,46 @@ def build_sections(con, pid: str, task: str) -> list[tuple[str, str]]:
     """Gather all evidence sections for a task in one project."""
     secs: list[tuple[str, str]] = []
     proj = con.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone()
+    if proj is None:
+        known = [r["id"] for r in con.execute("SELECT id FROM projects ORDER BY id")]
+        raise ValueError(f"unknown project {pid!r} — indexed projects: {', '.join(known) or '(none)'}")
     # LIVE freshness — stored head goes stale the moment someone commits
-    import subprocess
-    head = (subprocess.run(["git", "-C", proj["path"], "rev-parse", "HEAD"],
-                           capture_output=True, text=True).stdout.strip() or "")[:12]
+    root = code_root(proj)
     indexed = (proj["indexed_commit"] or "")[:12]
-    dirty = len([l for l in subprocess.run(["git", "-C", proj["path"], "status", "--porcelain"],
-                 capture_output=True, text=True).stdout.splitlines() if l.strip()])
-    behind = 0
-    if head and indexed and head != indexed:
-        row = con.execute("""SELECT COUNT(*) c FROM commits WHERE project_id=? AND date >=
-                             COALESCE((SELECT date FROM commits WHERE project_id=? AND sha LIKE ?),'1970-01-01')""",
-                          (pid, pid, indexed + "%")).fetchone()
-        behind = max(row["c"] - 1, 0)
-    fresh = "fresh" if behind == 0 else f"brain behind repo by ~{behind} commits — run cortex update; verify against current code"
-    header = f"PROJECT: {proj['name']} ({pid})\nPATH: {proj['path']}\nSTACK: {proj['languages']} | frameworks: {proj['frameworks']}\nFRESHNESS: {fresh}"
+    gitinfo = live_git(root, indexed)
+    head, dirty, behind = gitinfo["head"], gitinfo["dirty"], gitinfo["behind"]
+    if not head:
+        fresh = ("not available (non-git project)" if not indexed else
+                 "⚠ STALE — repository has no readable git HEAD")
+    elif head != indexed:
+        distance = f"{behind} commit(s)" if behind is not None else "an unknown number of commits"
+        fresh = f"brain behind repo by {distance} — run cortex update; verify against current code"
+    elif dirty:
+        fresh = (f"⚠ DIRTY — {dirty} uncommitted change(s) may differ from the index; "
+                 "run cortex update or verify current code")
+    else:
+        fresh = "fresh"
+    # A missing git HEAD makes `behind` 0, which would report a vanished repo as
+    # "fresh". Confirm the indexed code is actually on disk before claiming that.
+    disk_warning = None
+    rootp = pathlib.Path(root)
+    if not rootp.is_dir():
+        disk_warning = f"project directory {root} DOES NOT EXIST — every path below is stale"
+    else:
+        sample = [r["path"] for r in con.execute(
+            "SELECT path FROM files WHERE project_id=? ORDER BY importance DESC LIMIT 20", (pid,))]
+        alive = sum(1 for s in sample if (rootp / s).exists())
+        if sample and alive == 0:
+            disk_warning = (f"NONE of this project's indexed files exist under {root} — "
+                            "the code moved or was deleted; do not trust the paths below")
+        elif sample and alive < len(sample) // 2:
+            disk_warning = (f"only {alive}/{len(sample)} sampled files still exist under {root} — "
+                            "run cortex update and verify before acting")
+    if disk_warning:
+        fresh = f"⚠ STALE — {disk_warning}"
+    langs = ",".join(l.lstrip(".") for l in (proj["languages"] or "").split(",") if l) or "unknown"
+    stack = langs + (f" | frameworks: {proj['frameworks']}" if proj["frameworks"] else "")
+    header = f"PROJECT: {proj['name']} ({pid})\nPATH: {root}\nSTACK: {stack}\nFRESHNESS: {fresh}"
     if dirty:
         header += f"\nNOTE: {dirty} uncommitted changes exist in worktree (analysis may lag worktree)"
     secs.append(("HEADER", header))
@@ -146,7 +172,6 @@ def build_sections(con, pid: str, task: str) -> list[tuple[str, str]]:
     kb_lines = []
     rule_lines = []
     warn_lines = []
-    hist_lines = []
     for m in mems:
         stale_mark = " [STALE]" if m["stale"] else ""
         entry = f"- [{m['scope']}|{m['confidence']}]{stale_mark} {m['title']}: " + \
@@ -289,7 +314,6 @@ def context_cross(con, task: str, budget: int = 4000) -> dict:
     if not (mems or syms or files):
         return {"packet": f"NO EVIDENCE for '{task}' in any indexed project.",
                 "tokens_est": 12, "truncated": False}
-    by_proj: dict[str | None, list[str]] = {}
     used = len("## CROSS-PROJECT RESULTS\n")
     out = ["## CROSS-PROJECT RESULTS"]
     def emit(pid, line):
@@ -346,7 +370,7 @@ def context(con, task: str, project_id: str | None = None, budget: int = 4000,
     if project_id is None and any(c in tl for c in CROSS_CUES):
         return context_cross(con, task, budget)
     explicit_or_cwd_project = project_id
-    pid = project_id or search.detect_project(con, task)
+    pid = project_id or search.detect_named_project(con, task)
     if not pid:
         return {"error": "could not determine target project; pass project explicitly"}
     if not explicit_or_cwd_project:

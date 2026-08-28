@@ -5,15 +5,16 @@
 Requires Python 3.11+ and `git` on PATH.
 
 ```bash
-# pipx (recommended)
-pipx install git+https://github.com/OWNER/cortex.git
+# isolated command install (recommended)
+pipx install git+https://github.com/FlamuxDev/project-cortex.git
 
-# uv
-uv tool install git+https://github.com/OWNER/cortex.git
+# uv works too
+uv tool install git+https://github.com/FlamuxDev/project-cortex.git
 
-# pip from source
-git clone https://github.com/OWNER/cortex.git
-cd cortex && pip install .
+# editable source checkout, if you plan to hack on it
+git clone https://github.com/FlamuxDev/project-cortex.git
+cd project-cortex
+pip install -e .
 ```
 
 The only runtime dependencies are `tree-sitter` and its language grammars (TypeScript, JavaScript, Python, Go) — installed automatically.
@@ -82,13 +83,18 @@ args = ["serve"]
 
 Generic MCP clients: spawn `cortex serve` (JSON-RPC over stdio), then `initialize` → `tools/list` → `tools/call`. See [`docs/MCP.md`](MCP.md).
 
+MCP servers can outlive one editor workspace. Pass the `project` id (or optional `cwd`)
+on context/task calls when the client does not launch a separate server per repository.
+
 ## Environment variables
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `CORTEX_HOME` | `~/.cortex` | State dir holding `config.json` |
+| `CORTEX_HOME` | `~/.cortex` | State dir holding `config.json`, `glossary.json` and `data/` |
 | `CORTEX_ROOTS` | *(unset)* | Colon-separated override for configured roots, e.g. `/work/repos:/oss`. Takes precedence over `config.json` |
-| `CORTEX_DATA_DIR` | `<install>/data/cortex.db` | Path to the SQLite brain |
+| `CORTEX_DATA_DIR` | `$CORTEX_HOME/data/cortex.db` | Path to the SQLite brain |
+| `CORTEX_FTS_SYMBOL_CAP` | `100000` | Symbols per project entering full-text search, by importance |
+| `CORTEX_FTS_FILE_CAP` | `20000` | Files per project entering full-text search |
 
 Example: keep everything out of `$HOME`:
 
@@ -96,6 +102,31 @@ Example: keep everything out of `$HOME`:
 export CORTEX_HOME=/data/cortex-home
 export CORTEX_DATA_DIR=/data/cortex-home/brain.db
 ```
+
+Upgrading from a pre-0.3 checkout: the brain used to live at `<checkout>/data/cortex.db`.
+That file is still picked up automatically if it exists, so nothing breaks — move it to
+`~/.cortex/data/cortex.db` when convenient (stop `cortex serve` first, and take the
+`-wal`/`-shm` siblings with it).
+
+## Non-English tasks
+
+Cortex bridges non-English task wording to English identifiers via a term glossary, so
+`"عدل booking validation"` retrieves the same code as the English phrasing. The shipped
+Arabic table (`cortex/data/glossary_ar.json`) is a generic starter — extend it for your own
+domain by creating `$CORTEX_HOME/glossary.json`:
+
+```json
+{
+  "terms": {
+    "شحنة": ["shipment", "delivery"],
+    "مرتجع": ["refund", "return"]
+  }
+}
+```
+
+User entries are merged over the shipped ones (same key wins), so you can both add new
+terms and override the defaults. A missing or malformed file is ignored rather than
+breaking search.
 
 ## Daily loop
 
@@ -123,4 +154,6 @@ python -m unittest discover tests     # stdlib unittest suite, no fixtures neede
 
 **Project not detected when running commands:** pass `--project <id>` explicitly, or run inside the repo — cwd detection wins otherwise.
 
-**Packet says `FRESHNESS: brain behind repo by ~N commits`:** someone committed since indexing. Run `cortex update <project>` (or `cortex update` for all roots).
+**Packet says the brain is behind by N commits:** someone committed since indexing. Run `cortex update <project>` (or `cortex update` for all roots).
+
+**Packet says `DIRTY`:** uncommitted code may differ from the last index. Run `cortex update <project>` or verify the cited files directly before editing.

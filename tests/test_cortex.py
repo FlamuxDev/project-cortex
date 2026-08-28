@@ -3,14 +3,13 @@
 Run: .venv/bin/python -m pytest tests -q   OR   .venv/bin/python -m unittest discover tests
 """
 from __future__ import annotations
-import json, os, pathlib, sqlite3, subprocess, sys, tempfile, textwrap, unittest
+import json, pathlib, sqlite3, subprocess, sys, tempfile, textwrap, unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from cortex import extractors, langs, search          # noqa: E402
 from cortex.contextpack import context, impact        # noqa: E402
-from cortex.db import connect                          # noqa: E402
 
 
 def make_fixture_repo(base: pathlib.Path) -> pathlib.Path:
@@ -152,6 +151,7 @@ class TestPipeline(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.con.close()
         cls.tmp.cleanup()
 
     def test_counts(self):
@@ -200,14 +200,10 @@ class TestPipeline(unittest.TestCase):
         auth = self.repo / "src" / "auth.ts"
         original = auth.read_text()
         try:
-            head_before = self.con.execute(
-                "SELECT indexed_commit FROM projects WHERE id='fixture'").fetchone()[0]
             auth.write_text(original + "\nexport function newThing() { return 1 }\n")
             subprocess.run(["git", "-C", str(self.repo), "add", "."], check=True)
             subprocess.run(["git", "-C", str(self.repo), "-c", "user.email=t@t", "-c", "user.name=t",
                             "commit", "-qm", "feat: add newThing"], check=True)
-            from cortex.indexer import update_project
-            from cortex.discovery import discover_projects
             # register fixture in projects table already done; craft proj dict
             proj = {"id": "fixture", "name": "fixture", "path": str(self.repo),
                     "repo_path": str(self.repo), "git_head": subprocess.run(
@@ -239,10 +235,11 @@ class TestPipeline(unittest.TestCase):
             auth = repo2 / "src" / "auth.ts"
             original = auth.read_text()
             auth.write_text(original + "\n// touch\n")
-            res = _incremental(con2, "fixture", repo2, files, set(files), None, None)
+            _incremental(con2, "fixture", repo2, files, set(files), None, None)
             stale = con2.execute("SELECT stale FROM memories WHERE title='M'").fetchone()[0]
             self.assertEqual(stale, 1)
         finally:
+            con2.close()
             tmp2.cleanup()
 
 

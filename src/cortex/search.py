@@ -1,6 +1,6 @@
 """Hybrid retrieval: lexical (FTS5 BM25) + graph signals + importance."""
 from __future__ import annotations
-import json, re
+import json, pathlib, re
 
 STOP = set("""a an the is are was were be been to of in on for with and or not this that these those
 how what when where which who why does do did can could should would will i we you it its as at by
@@ -8,29 +8,25 @@ from into if then else there here my our your their me us them""".split())
 
 AR_STOP = {"في","من","على","عن","الى","إلى","هذا","هذه","التي","الذي","ما","هل","كيف","أين","اين","مع","عند","عدل"}
 
-# pragmatic AR->EN glossary so Arabic tasks hit English code/memories
-AR_EN = {
-    "قاعدة": ["knowledge"], "المعرفة": ["knowledge"], "معرفة": ["knowledge"],
-    "مصادقة": ["auth", "authentication"], "توثيق": ["auth"],
-    "دفع": ["payment"], "المدفوعات": ["payment", "billing"],
-    "اشعار": ["notification"], "اشعارات": ["notification"],
-    "مستخدم": ["user"], "المستخدمين": ["users", "member"],
-    "صلاحيات": ["permission", "rbac", "role"],
-    "حملة": ["campaign"], "الحملات": ["campaign"],
-    "موظف": ["employee"], "الموظفين": ["employee", "attendance"],
-    "حضور": ["attendance"], "انصراف": ["checkout", "attendance"],
-    "اجازة": ["leave", "vacation", "holiday"], "اجازات": ["leave", "holiday"],
-    "راتب": ["payroll", "salary"], "رواتب": ["payroll"],
-    "خصم": ["deduction", "violation"], "خصومات": ["deduction"],
-    "فاتورة": ["invoice"], "فواتير": ["invoice"],
-    "عميل": ["customer", "client"], "عملاء": ["customer"],
-    "حجز": ["booking", "appointment"], "حجوزات": ["booking", "appointments"],
-    "مواعيد": ["appointments", "schedules"], "موعد": ["appointment"],
-    "تقرير": ["report"], "تقارير": ["report"],
-    "webhook": [], "قناة": ["channel"], "واتساب": ["whatsapp"],
-    "تعديل": ["change", "update"], "اضافة": ["add", "create"],
-    "حذف": ["delete", "remove"], "عرض": ["view", "list", "show"],
-}
+# AR->EN glossary so Arabic tasks hit English code/memories. The shipped table is
+# a generic starter; extend it per install via $CORTEX_HOME/glossary.json
+# ({"terms": {"<arabic>": ["<english>", ...]}}) — user entries override and extend.
+def _load_glossary() -> dict[str, list[str]]:
+    terms: dict[str, list[str]] = {}
+    shipped = pathlib.Path(__file__).parent / "data" / "glossary_ar.json"
+    from cortex.db import cortex_home
+    for src in (shipped, cortex_home() / "glossary.json"):
+        try:
+            data = json.loads(src.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue  # missing or malformed: never let a bad glossary break search
+        for k, v in (data.get("terms") or {}).items():
+            if isinstance(v, list):
+                terms[k] = [str(x) for x in v]
+    return terms
+
+
+AR_EN = _load_glossary()
 
 
 AR_PUNCT = "؟?،؛:.!«»()[]{}\"'\u061f\u06cc"
@@ -50,7 +46,11 @@ def keywords(q: str) -> list[str]:
         # naive plural ة→at / at→ة bridging for common nouns
         if base.endswith("ات") and base[:-2] in AR_EN:
             extra.extend(AR_EN[base[:-2]])
-    return out + [e for e in extra if e not in STOP]
+    # dedup: the article-stripping and plural paths re-hit the same glossary
+    # entry, and duplicates would burn slots in fts_query's 12-term cap
+    seen = set(out)
+    return out + [e for e in extra
+                  if e not in STOP and not (e in seen or seen.add(e))]
 
 
 def fts_query(q: str) -> str:
@@ -206,19 +206,36 @@ def recent_commits(con, project_id: str, paths: list[str] | None = None, limit=8
     return [dict(r) for r in rows]
 
 
+def detect_named_project(con, text: str) -> str | None:
+    """Resolve a project only when its id/name is explicitly present in text.
+
+    This is intentionally stricter than lexical evidence ranking: generic task
+    words must never route a session to an unrelated repository.
+    """
+    normalized = re.sub(r"[^\w]+", " ", text.lower()).strip()
+    matches: list[tuple[int, str]] = []
+    for p in con.execute("SELECT id,name FROM projects"):
+        aliases = {p["id"], p["name"] or ""}
+        for alias in aliases:
+            phrase = re.sub(r"[^\w]+", " ", alias.lower()).strip()
+            if len(phrase) < 3:
+                continue
+            if re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", normalized):
+                matches.append((len(phrase), p["id"]))
+                break
+    if not matches:
+        return None
+    matches.sort(reverse=True)
+    best_len = matches[0][0]
+    best = {pid for size, pid in matches if size == best_len}
+    return next(iter(best)) if len(best) == 1 else None
+
+
 def detect_project(con, task: str) -> str | None:
     """Guess target project from a natural-language task."""
-    tl = task.lower()
-    best, score = None, 0
-    for p in con.execute("SELECT id,name,path FROM projects"):
-        s = 0
-        for token in {p["id"], p["name"].lower()} - {""}:
-            if token in tl:
-                s += 10
-        if s > score:
-            best, score = p["id"], s
-    if best:
-        return best
+    named = detect_named_project(con, task)
+    if named:
+        return named
     # fall back: which project's evidence matches the task lexically strongest?
     counts: dict[str, int] = {}
     for r in search_files(con, None, task, limit=6):

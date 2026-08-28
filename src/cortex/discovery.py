@@ -1,14 +1,10 @@
 """Project discovery under configured root directories."""
 from __future__ import annotations
-import json, os, pathlib, subprocess, sys
+import json, os, pathlib, subprocess, sys, tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from cortex.langs import is_code, ignored_dir
-
-
-def cortex_home() -> pathlib.Path:
-    """Per-user state dir: data/ + config.json. Override with CORTEX_HOME."""
-    return pathlib.Path(os.environ.get("CORTEX_HOME", "~/.cortex")).expanduser()
+from cortex.db import cortex_home  # noqa: F401  re-exported; canonical home lives in db
 
 
 def load_config() -> dict:
@@ -27,9 +23,19 @@ def load_config() -> dict:
 
 
 def save_config(cfg: dict):
-    cfg_path = cortex_home()
-    cfg_path.mkdir(parents=True, exist_ok=True)
-    (cfg_path / "config.json").write_text(json.dumps(cfg, indent=1))
+    home = cortex_home()
+    home.mkdir(parents=True, exist_ok=True)
+    target = home / "config.json"
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=home,
+                                     prefix=".config.", suffix=".tmp", delete=False) as f:
+        pending = pathlib.Path(f.name)
+        f.write(json.dumps(cfg, indent=1) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    try:
+        os.replace(pending, target)
+    finally:
+        pending.unlink(missing_ok=True)
 
 
 EXCLUDED: set[str] = set()  # per-install exclusions come from config.json
@@ -73,8 +79,13 @@ def detect_manifests(root: pathlib.Path) -> dict:
         info["package_managers"].add("pip")
     if (root / "go.mod").exists():
         info["package_managers"].add("go")
-    for ws in list(root.glob("apps/*/package.json")) + list(root.glob("packages/*/package.json")):
+    workspaces = list(root.glob("apps/*/package.json")) + list(root.glob("packages/*/package.json"))
+    if workspaces:
         info["kind"] = "monorepo"
+    # the root manifest counts too — a single-package repo has no apps/ or packages/
+    for ws in workspaces + [root / "package.json"]:
+        if not ws.exists():
+            continue
         try:
             pkg = json.loads(ws.read_text())
             deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
@@ -108,7 +119,7 @@ def _describe(d: pathlib.Path, target: pathlib.Path) -> dict:
     files = scan_file_tree(target)
     langs: dict[str, int] = {}
     for f in files:
-        ext = pathlib.Path(f).suffix or "noext"
+        ext = pathlib.Path(f).suffix.lstrip(".") or "noext"
         langs[ext] = langs.get(ext, 0) + 1
     top_langs = ",".join(l for l, _ in sorted(langs.items(), key=lambda kv: -kv[1])[:4])
     meta = detect_manifests(target)
@@ -134,12 +145,17 @@ def _discover_in(root: pathlib.Path, excluded: set[str]) -> list[dict]:
     for d in sorted(root.iterdir()):
         if not d.is_dir() or d.name in excluded or d.name in EXCLUDED or ignored_dir(d.name):
             continue
-        # nested repo case: wrapper dir containing a single inner repo
+        # Nested repo case: select a single manifest-bearing child, not the
+        # first directory returned by the filesystem (which may be docs/cache).
         target = d
         if not (d / ".git").exists() and not any(d.glob("*.toml")) and not any(d.glob("package.json")):
-            subdirs = [s for s in d.iterdir() if s.is_dir() and not s.name.startswith(".")]
-            if len(subdirs) >= 1:
-                target = subdirs[0]
+            subdirs = sorted(s for s in d.iterdir()
+                             if s.is_dir() and not s.name.startswith("."))
+            candidates = [s for s in subdirs if (s / ".git").exists()
+                          or (s / "package.json").exists() or (s / "go.mod").exists()
+                          or any(s.glob("*.toml"))]
+            if len(candidates) == 1:
+                target = candidates[0]
         proj = _describe(d, target)
         if proj["file_count"] < 3:
             continue

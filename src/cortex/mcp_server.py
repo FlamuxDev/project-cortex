@@ -1,33 +1,40 @@
 """Zero-dependency MCP server (JSON-RPC 2.0 over stdio)."""
 from __future__ import annotations
-import json, pathlib, sys
+import atexit, json, pathlib, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
-from cortex.db import connect
+from cortex.db import code_root, connect
 from cortex import search
 from cortex.contextpack import context as ctx_fn, impact as impact_fn
 from cortex.indexer import update_project
 from cortex import session as S
+from cortex import __version__
 
 CON = connect()
+atexit.register(CON.close)
 
 
-def _pid(args):
-    """explicit project > cwd detection (MCP clients spawn us inside the repo)."""
+def _pid(args, hint: str | None = None):
+    """Resolve explicit project/cwd, then an explicit project name, then server cwd."""
     try:
-        return S.resolve_project(CON, args.get("project"))
+        if args.get("project"):
+            return S.resolve_project(CON, args["project"])
+        if args.get("cwd"):
+            return S.resolve_project(CON, cwd=args["cwd"])
+        named = search.detect_named_project(CON, hint or "")
+        return named or S.resolve_project(CON)
     except ValueError as e:
         raise ValueError(str(e))
 
 
 def tool_context(args):
-    r = ctx_fn(CON, args["task"], project_id=_pid(args),
+    r = ctx_fn(CON, args["task"], project_id=_pid(args, args["task"]),
                budget=int(args.get("budget", 4000)))
     return [{"type": "text", "text": r.get("packet") or r.get("error", "")}]
 
 
 def tool_task_start(args):
-    r = S.task_start(CON, args["task"], project=args.get("project"),
+    r = S.task_start(CON, args["task"], project=_pid(args, args["task"]),
                      budget=int(args.get("budget", 3000)))
     if "error" in r:
         return [{"type": "text", "text": f"error: {r['error']}"}]
@@ -39,7 +46,7 @@ def tool_task_start(args):
 
 
 def tool_search(args):
-    q, pid = args["query"], _pid(args)
+    q, pid = args["query"], _pid(args, args["query"])
     out = []
     for kind, fn in [("symbol", search.search_symbols), ("memory", search.search_memories),
                      ("file", search.search_files)]:
@@ -54,7 +61,7 @@ def tool_search(args):
 
 
 def tool_impact(args):
-    r = impact_fn(CON, args["target"], project_id=_pid(args))
+    r = impact_fn(CON, args["target"], project_id=_pid(args, args["target"]))
     sid = args.get("session")
     if "error" not in r and sid:
         try:
@@ -101,7 +108,7 @@ def tool_quality(args):
 
 
 def tool_module(args):
-    pid = _pid(args) or search.detect_project(CON, args["name"])
+    pid = _pid(args, args["name"])
     rows = CON.execute("SELECT * FROM modules WHERE project_id=? AND (slug LIKE ? OR name LIKE ?)",
                        (pid, f"%{args['name']}%", f"%{args['name']}%")).fetchall()
     texts = [f"# {m['name']} [{m['confidence']}] verified@{m['verified_at_commit']}\n{m['body_md']}" for m in rows]
@@ -134,7 +141,7 @@ def tool_references(args):
 
 
 def tool_callers(args):
-    pid = _pid(args) or search.detect_project(CON, args["path"])
+    pid = _pid(args, args["path"])
     cl = search.callers_of(CON, pid, args["path"], args.get("symbol"))
     imps = search.importers_of(CON, pid, args["path"])
     lines = [f"calls into {args['path']}:" ] + [f"  {c}" for c in cl] + ["imports it:"] + [f"  {i}" for i in imps]
@@ -142,7 +149,7 @@ def tool_callers(args):
 
 
 def tool_tests(args):
-    pid = _pid(args) or search.detect_project(CON, args["target"])
+    pid = _pid(args, args["target"])
     hits = search.tests_for_paths(CON, pid, [args["target"]], limit=15)
     return [{"type": "text", "text": "\n".join(
         f"[{h['kind']}{' DIRECT' if h['direct'] else ''}] {h['path']}" for h in hits) or "no mapped tests"}]
@@ -150,9 +157,16 @@ def tool_tests(args):
 
 def tool_projects(args):
     rows = []
-    for p in CON.execute("SELECT id,name,path,kind,languages,indexed_commit,git_head,dirty_files FROM projects ORDER BY id"):
-        fresh = "fresh" if p["git_head"] == p["indexed_commit"] else f"behind/dirty({p['dirty_files']})"
-        rows.append(f"{p['id']:16} {p['kind'] or '':10} {fresh:20} {p['languages']}")
+    for p in CON.execute("SELECT * FROM projects ORDER BY id"):
+        root = pathlib.Path(code_root(p))
+        if not root.is_dir():
+            state = "path-gone"
+        else:
+            info = S.live_git(str(root), p["indexed_commit"])
+            state = S.freshness_status(info)
+            if info["dirty"]:
+                state += f"({info['dirty']})"
+        rows.append(f"{p['id']:16} {p['kind'] or '':10} {state:20} {p['languages']}")
     return [{"type": "text", "text": "\n".join(rows)}]
 
 
@@ -162,11 +176,21 @@ def tool_status(args):
         n = CON.execute("SELECT COUNT(*) c FROM projects").fetchone()["c"]
         return [{"type": "text", "text": f"cortex: {n} projects indexed. Pass a project for details."}]
     p = CON.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone()
+    if not p:
+        return [{"type": "text", "text": f"error: unknown project '{pid}'"}]
     def c(sql):
         return CON.execute(sql, (pid,)).fetchone()[0]
     stale_mem = c("SELECT COUNT(*) FROM memories WHERE project_id=? AND stale=1")
+    root = pathlib.Path(code_root(p))
+    if not root.is_dir():
+        state = "path-gone"
+        gitinfo = {"head": "", "indexed": (p["indexed_commit"] or "")[:12]}
+    else:
+        gitinfo = S.live_git(str(root), p["indexed_commit"])
+        state = S.freshness_status(gitinfo)
     return [{"type": "text", "text":
-             f"{p['name']} ({pid})\nHEAD {(p['git_head'] or '')[:12]} | indexed@{(p['indexed_commit'] or '')[:12]}\n"
+             f"{p['name']} ({pid})\nPATH {root}\nSTATE {state}\n"
+             f"HEAD {gitinfo['head']} | indexed@{gitinfo['indexed']}\n"
              f"files={c('SELECT COUNT(*) FROM files WHERE project_id=?')} symbols={c('SELECT COUNT(*) FROM symbols WHERE project_id=?')} "
              f"modules={c('SELECT COUNT(*) FROM modules WHERE project_id=?')} flows={c('SELECT COUNT(*) FROM flows WHERE project_id=?')} "
              f"apis={c('SELECT COUNT(*) FROM apis WHERE project_id=?')} tests={c('SELECT COUNT(*) FROM tests WHERE project_id=?')} "
@@ -187,7 +211,7 @@ def tool_update(args):
 
 
 def tool_history(args):
-    pid = args.get("project") or search.detect_project(CON, args.get("path") or "")
+    pid = _pid(args, args.get("path") or "")
     paths = [args["path"]] if args.get("path") else None
     rows = search.recent_commits(CON, pid, paths=paths, limit=int(args.get("limit", 12)),
                                  category=args.get("category"))
@@ -206,8 +230,8 @@ def tool_changed_since(args):
 
 
 TOOLS = {
-    "cortex_task_start": ("Start a tracked task session: auto-detects project from cwd, checks freshness, returns full context packet (module/files/symbols/tests/past lessons). Call this FIRST for any non-trivial task.",
-       {"task": {"type": "string"}, "project": {"type": "string"}, "budget": {"type": "number"}}, tool_task_start, ["task"]),
+    "cortex_task_start": ("Start a tracked task session: resolves project from explicit project/cwd, checks freshness, returns full context packet (module/files/symbols/tests/past lessons). Call this FIRST for any non-trivial task.",
+       {"task": {"type": "string"}, "project": {"type": "string"}, "cwd": {"type": "string"}, "budget": {"type": "number"}}, tool_task_start, ["task"]),
     "cortex_task_complete": ("Close a task session: gathers git evidence, computes retrieval precision metrics, stores a durable episode. Pass lessons=root-cause/invariant knowledge worth remembering; outcome in implemented|tested|verified|failed|partial|abandoned.",
        {"session_id": {"type": "number"}, "outcome": {"type": "string"}, "problem": {"type": "string"},
         "root_cause": {"type": "string"}, "lessons": {"type": "string"},
@@ -215,7 +239,7 @@ TOOLS = {
         "commit_sha": {"type": "string"}}, tool_task_complete, ["session_id"]),
     "cortex_quality": ("Learning-loop health: session/episode counts, hit rates, decay flags.", {}, tool_quality, []),
     "cortex_context": ("Budgeted engineering context packet for a natural-language task (no session tracking).",
-       {"task": {"type": "string"}, "project": {"type": "string"}, "budget": {"type": "number"}}, tool_context, ["task"]),
+       {"task": {"type": "string"}, "project": {"type": "string"}, "cwd": {"type": "string"}, "budget": {"type": "number"}}, tool_context, ["task"]),
     "cortex_search": ("Hybrid lexical+graph search across code, symbols and knowledge.",
        {"query": {"type": "string"}, "project": {"type": "string"}}, tool_search, ["query"]),
     "cortex_impact": ("Blast-radius estimate for changing a file/symbol/feature.",
@@ -251,7 +275,7 @@ def handle(req: dict) -> dict:
         return {"jsonrpc": "2.0", "id": rid, "result": {
             "protocolVersion": "2024-11-05",
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "project-cortex", "version": "0.1.0"}}}
+            "serverInfo": {"name": "project-cortex", "version": __version__}}}
     if method == "notifications/initialized":
         return {}
     if method == "tools/list":
@@ -279,23 +303,30 @@ def handle(req: dict) -> dict:
 
 
 def serve():
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            req = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        try:
-            resp = handle(req)
-        except Exception as e:  # one bad frame must never kill the server
-            rid = req.get("id") if isinstance(req, dict) else None
-            resp = {"jsonrpc": "2.0", "id": rid,
-                    "error": {"code": -32603, "message": f"internal error: {e}"}}
-        if resp:
-            sys.stdout.write(json.dumps(resp) + "\n")
-            sys.stdout.flush()
+    try:
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                req = json.loads(line)
+            except json.JSONDecodeError:
+                resp = {"jsonrpc": "2.0", "id": None,
+                        "error": {"code": -32700, "message": "parse error"}}
+            else:
+                try:
+                    resp = handle(req)
+                except Exception as e:  # one bad frame must never kill the server
+                    rid = req.get("id") if isinstance(req, dict) else None
+                    resp = {"jsonrpc": "2.0", "id": rid,
+                            "error": {"code": -32603, "message": f"internal error: {e}"}}
+            if resp:
+                sys.stdout.write(json.dumps(resp) + "\n")
+                sys.stdout.flush()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        CON.close()
 
 
 if __name__ == "__main__":

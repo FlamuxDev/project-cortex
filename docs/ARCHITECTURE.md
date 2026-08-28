@@ -1,6 +1,6 @@
 # Architecture (public overview)
 
-Condensed from the full [`ARCHITECTURE.md`](../ARCHITECTURE.md) and [`DESIGN.md`](../DESIGN.md).
+A condensed tour of the system. Honest caveats live in [`LIMITATIONS.md`](LIMITATIONS.md); measured numbers in [`BENCHMARKS.md`](BENCHMARKS.md).
 
 ## Components
 
@@ -45,7 +45,7 @@ Condensed from the full [`ARCHITECTURE.md`](../ARCHITECTURE.md) and [`DESIGN.md`
 - Next.js App Router conventions (`app/**/route.ts`) resolved at the indexer level.
 - Import resolution: relative paths, `@/`+`~/` aliases, monorepo suffix fallback; unresolved imports stay in `refs` and feed impact's barrel-reexport fallback.
 
-**Indexing** — full or incremental. Incremental diffs sha1 content hashes, re-extracts only changed files, marks intersecting memories stale, appends new git commits, recomputes importance, rebuilds per-project FTS rows. Seconds, not minutes.
+**Indexing** — full or incremental. Incremental diffs sha1 content hashes, re-extracts only changed files, rebuilds changed test mappings, marks intersecting memories stale, appends new git commits, recomputes importance, and replaces per-project FTS rows. Orphan FTS rows are pruned so removed symbols cannot leak into later searches. Seconds, not minutes.
 
 **Git mining** categorizes commits (fix/feat/refactor/docs/chore), builds file→commit mappings for hotspots, co-change, and "past fixes here" warnings.
 
@@ -83,11 +83,11 @@ Nothing trusts stored state. Every packet/query recomputes live:
 - commit-count distance since the indexed commit
 - dirty-file count via `git status --porcelain`
 
-Memories whose evidence files changed after ingest are flagged `[STALE]`; packets state staleness in their header instead of pretending to be current.
+Memories whose evidence files changed after ingest are flagged `[STALE]`; packets state staleness in their header instead of pretending to be current. A dirty worktree is never labeled fresh, even when HEAD still equals the indexed commit.
 
 ## Storage schema summary
 
-SQLite at `CORTEX_DATA_DIR` (default `<install>/data/cortex.db`), WAL mode, migrations applied automatically on connect.
+SQLite at `CORTEX_DATA_DIR` (default `~/.cortex/data/cortex.db`), WAL mode, migrations applied automatically on connect.
 
 | Group | Tables |
 |---|---|
@@ -107,4 +107,4 @@ SQLite at `CORTEX_DATA_DIR` (default `<install>/data/cortex.db`), WAL mode, migr
 | LSP servers | Cortex needs retrieval-grade intelligence ("which files/symbols/tests matter for this task"), not IDE-grade rename precision. tree-sitter + refs graph starts in milliseconds with zero per-language daemons. The extractor interface is pluggable if reference-quality ever demands it. | A use case needs rename/refactor-grade accuracy |
 | Daemons, cloud sync, accounts | Local-first by design: one SQLite file, one stdio process. | Never planned |
 
-See also: [`KNOWN_LIMITATIONS.md`](../KNOWN_LIMITATIONS.md).
+See also: [`LIMITATIONS.md`](LIMITATIONS.md).

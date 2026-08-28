@@ -2,9 +2,9 @@
 
 **A local-first engineering brain for AI coding agents. Index your codebase once, retrieve narrow context forever — stop paying agents to re-explore the same repo on every task.**
 
-[![CI](https://github.com/OWNER/cortex/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/cortex/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
+[![CI](https://github.com/FlamuxDev/project-cortex/actions/workflows/ci.yml/badge.svg)](https://github.com/FlamuxDev/project-cortex/actions/workflows/ci.yml)
 
 Cortex is an MCP server + CLI that gives any coding agent (Claude Code, Codex CLI, OpenCode, Cursor, or any MCP client) precise task context in seconds: which module owns a feature, which files and symbols matter, who calls them, which tests must run, what past tasks taught you, and what may break — all inside an explicit token budget. It doubles as an **AI agent memory**: completed tasks become episodes whose lessons resurface exactly when relevant.
 
@@ -18,7 +18,7 @@ Cortex is an MCP server + CLI that gives any coding agent (Claude Code, Codex CL
 ## Quickstart (30 seconds)
 
 ```bash
-pipx install git+https://github.com/OWNER/cortex.git
+pipx install git+https://github.com/FlamuxDev/project-cortex.git
 cortex init ~/code/myapp          # register + index one repo (or a dir of repos)
 cortex context "fix booking validation"
 ```
@@ -68,7 +68,7 @@ Run `cortex serve` and point your MCP client at it. 16 tools:
 
 | Tool | What it does |
 |---|---|
-| `cortex_task_start` | Tracked session: auto-detects project from cwd, freshness check, full briefing packet |
+| `cortex_task_start` | Tracked session: resolve project from id/cwd, freshness check, full briefing packet |
 | `cortex_task_complete` | Closes the session, gathers git evidence, records a durable episode with lessons |
 | `cortex_quality` | Learning-loop health: hit rates, episode counts, decay flags |
 | `cortex_context` | Budgeted context packet for a task (no tracking) |
@@ -112,8 +112,8 @@ Every completed task becomes an episode. Relevant lessons surface in future pack
 ## Why it works without embeddings, daemons, or cloud
 
 - **Deterministic indexing.** tree-sitter (TS/TSX/JS/Go) + stdlib `ast` (Python) + regex extractors (SQL/Prisma) → SQLite + FTS5. Same input, same index, no model drift.
-- **Hybrid retrieval beats vectors here.** BM25 + IDF keyword overlap + import/call graph + memory anchors hit 20/20 on the retrieval eval *without* an embedding pipeline. No service to run, nothing to phone home.
-- **Local-only.** One SQLite file under `~/.cortex`. No accounts, no sync, no telemetry.
+- **Hybrid retrieval beats vectors here.** BM25 + IDF keyword overlap + import/call graph + memory anchors carry the retrieval eval *without* an embedding pipeline. No service to run, nothing to phone home.
+- **Local-only.** One SQLite file under `~/.cortex/data/` (override with `CORTEX_DATA_DIR`). No accounts, no sync, no telemetry.
 - **Secrets stay out.** Every signature/doc/commit subject passes redaction before insert; `.pem` dirs are excluded at discovery; env var *names* may be stored, values never.
 
 ## Benchmarks
@@ -122,11 +122,11 @@ Honest labels — measured on real repos, or simulated policies over real tools:
 
 | Benchmark | Result | Type |
 |---|---|---|
-| Retrieval eval (20 realistic questions, 14 projects, budget 3000) | **20/20 pass**, p50 latency 0.02s | Measured |
-| Arabic / mixed-language retrieval eval | **8/8 pass** | Measured |
+| Retrieval eval (18 realistic questions, 13 projects, budget 3000) | **18/18 pass**, p50 latency 0.03s | Measured |
+| Arabic / mixed-language retrieval eval (7 questions) | **7/7 pass** | Measured |
 | Token cost to locate correct code area vs unaided grep-and-read policy | **~94% median reduction** (~174–187 KB → ~10–12 KB per task) | Simulated baseline policy over real repos |
 
-Details: [`RETRIEVAL_EVALUATION.md`](RETRIEVAL_EVALUATION.md) · [`TOKEN_EFFICIENCY_BENCHMARK.md`](TOKEN_EFFICIENCY_BENCHMARK.md) · [`ARABIC_EVALUATION.json`](ARABIC_EVALUATION.json). Eval questions were authored by the builder (optimism bias acknowledged in the doc); scripts are rerunnable.
+Full methodology, per-task results and stated limits: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md). Eval questions were authored by the builder against the builder's own repos — optimism bias is acknowledged there, and these are not third-party benchmarks.
 
 ## How it compares
 
@@ -138,6 +138,8 @@ Details: [`RETRIEVAL_EVALUATION.md`](RETRIEVAL_EVALUATION.md) · [`TOKEN_EFFICIE
 | Remembers past tasks | no | no | no | episodes + lessons resurface by relevance |
 | Git intelligence (hotspots, past fixes) | no | no | no | yes |
 | Runtime | none | none | heavy, language-specific | one Python process, zero daemons |
+
+Known limitations are written down rather than glossed: [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
 
 Positioning is deliberate: Cortex is **retrieval-grade, not IDE-grade**. It finds what matters fast; LSPs rename better. They compose — Cortex tells your agent where and what to verify.
 
@@ -169,9 +171,12 @@ Before non-trivial exploration: call cortex_task_start (or `cortex context "<tas
 Read only the PRIMARY FILES it names. Before changing a symbol: cortex_impact. Run RELATED TESTS before done.
 ```
 
+For long-lived MCP processes, pass `project` (or the optional `cwd`) explicitly; a
+server process cannot reliably infer a client's changing workspace directory.
+
 ## Architecture
 
-Deterministic extraction → SQLite brain (FTS5) → hybrid ranking → budgeted packets. Freshness is recomputed live from git at every query; stored state is never trusted. See [`docs/ARCHITECTURE_PUBLIC.md`](docs/ARCHITECTURE_PUBLIC.md).
+Deterministic extraction → SQLite brain (FTS5) → hybrid ranking → budgeted packets. Freshness is recomputed live from git at every query; stored state is never trusted. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Contributing
 

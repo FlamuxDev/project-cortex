@@ -8,7 +8,7 @@ Thanks for helping build the engineering brain. This doc covers the rules of the
 - **Python stdlib-first.** The only sanctioned runtime dependencies are tree-sitter and its grammars. Anything else needs a strong justification in the PR description.
 - **Deterministic only.** No model calls, no network access, no nondeterministic ordering anywhere in the index/retrieve path. Same input → same index → same packet.
 - **Secrets never land.** Any new persisted text field (signatures, docs, subjects, bodies) must pass through `cortex.langs.redact` before insert.
-- **Honest benchmarks.** If you touch retrieval or packets, rerun the evals (`scripts/retrieval_eval.py`, `scripts/token_benchmark.py`) and report real numbers, labeled measured vs simulated.
+- **Honest benchmarks.** If you touch retrieval or packets, add focused public fixture tests and describe the expected ranking change. Maintainers rerun the private-repository eval set before release; reported numbers must stay labeled measured vs simulated.
 
 ## Every PR
 
@@ -16,6 +16,7 @@ Thanks for helping build the engineering brain. This doc covers the rules of the
 2. Run the full suite:
    ```bash
    python -m unittest discover tests
+   ruff check --select F src tests
    ```
    All tests must pass. Tests use throwaway fixture repos; they don't touch a real index.
 3. Keep diffs focused — one logical change per PR.
@@ -50,7 +51,7 @@ The server is intentionally tiny: `src/cortex/mcp_server.py` holds everything.
 2. Register it in the `TOOLS` dict: `(description, json-schema-properties, handler, required-args)`. Write descriptions as agent-facing instructions ("call this when…"), not code comments.
 3. Errors go in-band as text (`"error: ..."`); one bad frame must never kill the server.
 4. Extend the round-trip self-test in `cli.py cmd_doctor` only if you add protocol surface.
-5. Document it: add a row to the tool table in `PUBLIC_README.md` and a section in `docs/MCP.md`.
+5. Document it: add a row to the tool table in `README.md` and a section in `docs/MCP.md`.
 
 ## Project layout
 
@@ -71,6 +72,9 @@ src/cortex/
 ├── mcp_server.py          zero-dep MCP stdio server
 ├── migrations/*.sql       numbered schema migrations, auto-applied
 └── cli.py                 command surface (cortex …)
-scripts/                   evals + benchmarks (rerunnable)
 tests/                     unittest suite (fixture repos built on the fly)
 ```
+
+The public repository documents benchmark methodology in `docs/BENCHMARKS.md`. The
+maintainer's raw ground truth references private repositories and is intentionally not
+published; public regression coverage belongs in the throwaway fixtures under `tests/`.

@@ -1,0 +1,147 @@
+{
+ "_comment": "Arabic -> English term bridge for retrieval. Extend per install by creating $CORTEX_HOME/glossary.json (default ~/.cortex/glossary.json) with the same shape; user entries override and extend these.",
+ "terms": {
+  "قاعدة": [
+   "knowledge"
+  ],
+  "المعرفة": [
+   "knowledge"
+  ],
+  "معرفة": [
+   "knowledge"
+  ],
+  "مصادقة": [
+   "auth",
+   "authentication"
+  ],
+  "توثيق": [
+   "auth"
+  ],
+  "دفع": [
+   "payment"
+  ],
+  "المدفوعات": [
+   "payment",
+   "billing"
+  ],
+  "اشعار": [
+   "notification"
+  ],
+  "اشعارات": [
+   "notification"
+  ],
+  "مستخدم": [
+   "user"
+  ],
+  "المستخدمين": [
+   "users",
+   "member"
+  ],
+  "صلاحيات": [
+   "permission",
+   "rbac",
+   "role"
+  ],
+  "حملة": [
+   "campaign"
+  ],
+  "الحملات": [
+   "campaign"
+  ],
+  "موظف": [
+   "employee"
+  ],
+  "الموظفين": [
+   "employee",
+   "attendance"
+  ],
+  "حضور": [
+   "attendance"
+  ],
+  "انصراف": [
+   "checkout",
+   "attendance"
+  ],
+  "اجازة": [
+   "leave",
+   "vacation",
+   "holiday"
+  ],
+  "اجازات": [
+   "leave",
+   "holiday"
+  ],
+  "راتب": [
+   "payroll",
+   "salary"
+  ],
+  "رواتب": [
+   "payroll"
+  ],
+  "خصم": [
+   "deduction",
+   "violation"
+  ],
+  "خصومات": [
+   "deduction"
+  ],
+  "فاتورة": [
+   "invoice"
+  ],
+  "فواتير": [
+   "invoice"
+  ],
+  "عميل": [
+   "customer",
+   "client"
+  ],
+  "عملاء": [
+   "customer"
+  ],
+  "حجز": [
+   "booking",
+   "appointment"
+  ],
+  "حجوزات": [
+   "booking",
+   "appointments"
+  ],
+  "مواعيد": [
+   "appointments",
+   "schedules"
+  ],
+  "موعد": [
+   "appointment"
+  ],
+  "تقرير": [
+   "report"
+  ],
+  "تقارير": [
+   "report"
+  ],
+  "webhook": [],
+  "قناة": [
+   "channel"
+  ],
+  "واتساب": [
+   "whatsapp"
+  ],
+  "تعديل": [
+   "change",
+   "update"
+  ],
+  "اضافة": [
+   "add",
+   "create"
+  ],
+  "حذف": [
+   "delete",
+   "remove"
+  ],
+  "عرض": [
+   "view",
+   "list",
+   "show"
+  ]
+ }
+}

@@ -1,10 +1,10 @@
 """Indexing engine: full + incremental."""
 from __future__ import annotations
-import hashlib, json, pathlib, posixpath, re, sys, time
+import hashlib, json, os, pathlib, posixpath, re, sys, time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from cortex import extractors, gitmine
-from cortex.db import connect, state_get, state_set
+from cortex.db import code_root, connect, state_set
 from cortex.langs import is_test, lang_of, redact
 from cortex.discovery import discover_projects, scan_file_tree
 
@@ -56,18 +56,21 @@ def resolve_import(spec: str, from_path: str, file_set: set[str], project_id: st
 # ------------------------------------------------------------------ indexing core
 def index_project(con, proj: dict, full: bool = True) -> dict:
     t0 = time.time()
-    root = pathlib.Path(proj["repo_path"])
+    root = pathlib.Path(proj.get("repo_path") or proj["path"])
     pid = proj["id"]
     head = proj.get("git_head")
 
     prev_head = con.execute("SELECT indexed_commit FROM projects WHERE id=?", (pid,)).fetchone()
     prev_head = prev_head["indexed_commit"] if prev_head else None
 
-    con.execute("""INSERT INTO projects(id,name,path,kind,languages,git_head,status)
-                   VALUES (?,?,?,?,?,?, 'active')
+    con.execute("""INSERT INTO projects(id,name,path,repo_path,kind,languages,frameworks,git_head,status)
+                   VALUES (?,?,?,?,?,?,?,?, 'active')
                    ON CONFLICT(id) DO UPDATE SET name=excluded.name, path=excluded.path,
-                     kind=excluded.kind, languages=excluded.languages, git_head=excluded.git_head""",
-                (pid, proj["name"], proj["path"], proj["kind"], proj["top_exts"], head))
+                     repo_path=excluded.repo_path, kind=excluded.kind,
+                     languages=excluded.languages, frameworks=excluded.frameworks,
+                     git_head=excluded.git_head""",
+                (pid, proj["name"], proj["path"], proj.get("repo_path") or proj["path"],
+                 proj["kind"], proj["top_exts"], proj.get("frameworks") or None, head))
     con.commit()
 
     files = scan_file_tree(root)
@@ -77,15 +80,14 @@ def index_project(con, proj: dict, full: bool = True) -> dict:
         return _incremental(con, pid, root, files, file_set, prev_head, head)
 
     # ---- full index: wipe deterministic rows, keep curated memories/modules
+    # FTS tables are contentless. Delete their rows while the source rowids still
+    # exist; doing this after deleting symbols/files leaves unjoinable ghosts.
+    _delete_project_fts(con, pid)
     for t in ["files", "symbols", "refs", "apis", "db_entities", "tests", "commits",
               "commit_files", "module_files"]:
         con.execute(f"DELETE FROM {t} WHERE project_id=?", (pid,))
-    con.execute("DELETE FROM fts_symbols WHERE rowid IN (SELECT rowid FROM fts_symbols)")
-    # (fts rebuilt wholesale at end)
 
     stats = {"files": 0, "symbols": 0, "refs": 0, "routes": 0, "tables": 0, "tests": 0}
-    test_targets = []  # (test_path, target_path)
-
     for rel in files:
         p = root / rel
         try:
@@ -136,17 +138,7 @@ def index_project(con, proj: dict, full: bool = True) -> dict:
             stats["tests"] += 1
 
     # test -> target mapping via imports
-    test_targets = []
-    for tr in con.execute("""SELECT DISTINCT r.src_path, r.dst_path FROM refs r
-                             JOIN files f ON f.project_id=r.project_id AND f.path=r.src_path
-                             WHERE r.project_id=? AND r.kind='import' AND f.is_test=1 AND r.dst_path IS NOT NULL""", (pid,)):
-        test_targets.append((tr["src_path"], tr["dst_path"]))
-    agg: dict[str, list] = {}
-    for tp, target in test_targets:
-        agg.setdefault(tp, []).append(target)
-    for tp, targets in agg.items():
-        con.execute("UPDATE tests SET targets_json=? WHERE project_id=? AND path=?",
-                    (json.dumps(sorted(set(targets))), pid, tp))
+    _refresh_test_targets(con, pid)
 
     # Next.js app-router routes (file conventions)
     _index_nextjs_routes(con, pid, file_set)
@@ -194,9 +186,11 @@ def _recompute_importance(con, pid):
                 ON cf.project_id=c.project_id AND cf.sha=c.sha
                 WHERE c.project_id=files.project_id AND cf.path=files.path AND c.category='fix') )
     """)
-    con.execute(f"""UPDATE files SET importance =
-          importance + (SELECT COUNT(*)*0.5 FROM refs r WHERE r.project_id='{pid}' AND r.src_path=files.path AND r.kind='import')
-          WHERE project_id='{pid}'""")
+    con.execute("""UPDATE files SET importance =
+          importance + (SELECT COUNT(*)*0.5 FROM refs r
+                        WHERE r.project_id=files.project_id
+                          AND r.src_path=files.path AND r.kind='import')
+          WHERE project_id=?""", (pid,))
     con.execute("""UPDATE symbols SET importance =
           COALESCE((SELECT COUNT(*) FROM refs r WHERE r.project_id=symbols.project_id
                     AND r.kind='call' AND (r.dst_name LIKE '%'||symbols.name)), 0) * 1.0
@@ -220,12 +214,31 @@ def _mine_git(con, pid, root):
 
 
 FTS_BATCH = 500
+# Symbols indexed for full-text search per project. The old hard-coded 20k left
+# large repos partly unsearchable by name with no signal that it had happened.
+FTS_SYMBOL_CAP = int(os.environ.get("CORTEX_FTS_SYMBOL_CAP", "100000"))
+FTS_FILE_CAP = int(os.environ.get("CORTEX_FTS_FILE_CAP", "20000"))
+
+
+def _delete_project_fts(con, pid: str) -> None:
+    """Remove one project's contentless FTS rows before source rows disappear."""
+    con.execute("DELETE FROM fts_symbols WHERE rowid IN "
+                "(SELECT id FROM symbols WHERE project_id=?)", (pid,))
+    con.execute("DELETE FROM fts_files WHERE rowid IN "
+                "(SELECT rowid FROM files WHERE project_id=?)", (pid,))
+
+
+def _prune_orphan_fts(con) -> None:
+    """Repair ghosts left by interrupted or pre-0.3 indexing runs."""
+    con.execute("DELETE FROM fts_symbols WHERE rowid NOT IN (SELECT id FROM symbols)")
+    con.execute("DELETE FROM fts_files WHERE rowid NOT IN (SELECT rowid FROM files)")
 
 
 def _refresh_fts(con, pid):
+    _prune_orphan_fts(con)
     con.execute("DELETE FROM fts_symbols WHERE rowid IN (SELECT id FROM symbols WHERE project_id=?)", (pid,))
     rows = con.execute("""SELECT s.rowid AS rid, s.name, s.signature, s.doc, s.path FROM symbols s
-                          WHERE s.project_id=? ORDER BY s.importance DESC LIMIT 20000""", (pid,)).fetchall()
+                          WHERE s.project_id=? ORDER BY s.importance DESC LIMIT ?""", (pid, FTS_SYMBOL_CAP)).fetchall()
     batch = []
     for r in rows:
         batch.append((r["rid"], r["name"], r["signature"] or "", r["doc"] or "", r["path"]))
@@ -236,9 +249,10 @@ def _refresh_fts(con, pid):
         con.executemany("INSERT INTO fts_symbols(rowid,name,sig,doc,path) VALUES (?,?,?,?,?)", batch)
     con.execute("DELETE FROM fts_files WHERE rowid IN (SELECT rowid FROM files WHERE project_id=?)", (pid,))
     from cortex.langs import content_terms
-    prow = con.execute("SELECT path FROM projects WHERE id=?", (pid,)).fetchone()
-    root = pathlib.Path(prow["path"]) if prow else None
-    rows = con.execute("SELECT rowid AS rid, path FROM files WHERE project_id=? ORDER BY importance DESC LIMIT 10000", (pid,)).fetchall()
+    prow = con.execute("SELECT path, repo_path FROM projects WHERE id=?", (pid,)).fetchone()
+    root = pathlib.Path(code_root(prow)) if prow else None
+    rows = con.execute("SELECT rowid AS rid, path FROM files WHERE project_id=? ORDER BY importance DESC LIMIT ?",
+                       (pid, FTS_FILE_CAP)).fetchall()
     batch = []
     for r in rows:
         terms = ""
@@ -293,6 +307,13 @@ def _incremental(con, pid, root: pathlib.Path, files: list[str], file_set: set[s
     # changed files per git status are already covered by hash comparison above.
 
     reindexed = set(changed) | set(added) | set(removed)
+    if reindexed:
+        marks = ",".join("?" for _ in reindexed)
+        args = (pid, *sorted(reindexed))
+        con.execute(f"DELETE FROM fts_symbols WHERE rowid IN (SELECT id FROM symbols "
+                    f"WHERE project_id=? AND path IN ({marks}))", args)
+        con.execute(f"DELETE FROM fts_files WHERE rowid IN (SELECT rowid FROM files "
+                    f"WHERE project_id=? AND path IN ({marks}))", args)
     for rel in reindexed:
         con.execute("DELETE FROM symbols WHERE project_id=? AND path=?", (pid, rel))
         con.execute("DELETE FROM refs WHERE project_id=? AND src_path=?", (pid, rel))
@@ -316,10 +337,11 @@ def _incremental(con, pid, root: pathlib.Path, files: list[str], file_set: set[s
         lang = lang_of(rel)
         res = extractors.extract(raw, lang, rel) if lang else {"symbols": [], "refs": [], "routes": [], "tables": []}
         loc = raw.count(b"\n") + 1
+        test_file = is_test(rel)
         con.execute("""INSERT OR REPLACE INTO files(project_id,path,lang,ext,loc,hash,is_test,is_entry)
                        VALUES (?,?,?,?,?,?,?,?)""",
                     (pid, rel, lang, pathlib.Path(rel).suffix, loc, sha1(raw),
-                     int(is_test(rel)), int(_is_entry(rel))))
+                     int(test_file), int(_is_entry(rel))))
         for s in res["symbols"]:
             con.execute("""INSERT INTO symbols(project_id,path,name,kind,parent,line_start,line_end,signature,doc,exported)
                            VALUES (?,?,?,?,?,?,?,?,?,?)""",
@@ -337,9 +359,17 @@ def _incremental(con, pid, root: pathlib.Path, files: list[str], file_set: set[s
         for tb in res["tables"]:
             con.execute("INSERT INTO db_entities(project_id,name,kind,file_path) VALUES (?,?,?,?)",
                         (pid, tb["name"], tb["kind"], rel))
+        if test_file:
+            kind = ("e2e" if "/e2e/" in rel or "e2e" in rel.split("/")[:3] else
+                    "integration" if "integration" in rel.lower() else "unit")
+            con.execute("INSERT INTO tests(project_id,path,name,kind) VALUES (?,?,?,?)",
+                        (pid, rel, pathlib.Path(rel).stem, kind))
 
     if head != prev_head:
         _mine_git(con, pid, str(root))
+    if added or removed:
+        _refresh_import_paths(con, pid, file_set)
+    _refresh_test_targets(con, pid)
     _recompute_importance(con, pid)
     _refresh_fts(con, pid)
     con.execute("""UPDATE projects SET indexed_commit=?, last_indexed_at=datetime('now'),
@@ -349,6 +379,29 @@ def _incremental(con, pid, root: pathlib.Path, files: list[str], file_set: set[s
             "dirty": dirty, "stale_memories": con.execute(
                 "SELECT COUNT(*) c FROM memories WHERE project_id=? AND stale=1", (pid,)).fetchone()["c"],
             "secs": round(time.time() - t0, 1)}
+
+
+def _refresh_test_targets(con, pid: str) -> None:
+    """Rebuild test-to-target mappings after either full or incremental extraction."""
+    con.execute("UPDATE tests SET targets_json=NULL WHERE project_id=?", (pid,))
+    agg: dict[str, list[str]] = {}
+    for tr in con.execute("""SELECT DISTINCT r.src_path, r.dst_path FROM refs r
+                             JOIN files f ON f.project_id=r.project_id AND f.path=r.src_path
+                             WHERE r.project_id=? AND r.kind='import' AND f.is_test=1
+                               AND r.dst_path IS NOT NULL""", (pid,)):
+        agg.setdefault(tr["src_path"], []).append(tr["dst_path"])
+    for test_path, targets in agg.items():
+        con.execute("UPDATE tests SET targets_json=? WHERE project_id=? AND path=?",
+                    (json.dumps(sorted(set(targets))), pid, test_path))
+
+
+def _refresh_import_paths(con, pid: str, file_set: set[str]) -> None:
+    """Re-resolve unchanged imports after files are added or removed."""
+    rows = con.execute("SELECT rowid,src_path,dst_name FROM refs "
+                       "WHERE project_id=? AND kind='import'", (pid,)).fetchall()
+    updates = [(resolve_import(r["dst_name"], r["src_path"], file_set, pid), r["rowid"])
+               for r in rows]
+    con.executemany("UPDATE refs SET dst_path=? WHERE rowid=?", updates)
 
 
 def update_project(con, project_id: str) -> dict:

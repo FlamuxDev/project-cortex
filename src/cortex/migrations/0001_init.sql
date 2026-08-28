@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 
 CREATE TABLE IF NOT EXISTS projects (
-  id TEXT PRIMARY KEY,                -- slug e.g. 'cvm'
+  id TEXT PRIMARY KEY,                -- slug e.g. 'myapp'
   name TEXT NOT NULL,
   path TEXT NOT NULL UNIQUE,
   kind TEXT,                          -- monorepo|app|service|library|scripts|docs

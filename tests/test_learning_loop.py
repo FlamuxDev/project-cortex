@@ -6,7 +6,7 @@ import json, pathlib, sqlite3, subprocess, sys, tempfile, textwrap, unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from cortex.db import connect, migrate                    # noqa: E402
+from cortex.db import migrate                             # noqa: E402
 from cortex.indexer import index_project                  # noqa: E402
 from cortex import session as S                           # noqa: E402
 
@@ -52,6 +52,7 @@ class Base(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.con.close()
         cls.tmp.cleanup()
 
     def _git(self, *a):
@@ -91,8 +92,13 @@ class TestDetection(Base):
 
     def test_task_start_needs_project_outside_repos(self):
         r = S.task_start(self.con, "add validation", cwd=str(pathlib.Path(self.tmp.name)))
-        if "error" in r:
-            self.assertIn("project", r["error"])  # lexical fallback may or may not hit
+        self.assertIn("error", r)
+        self.assertIn("project", r["error"])
+
+    def test_task_start_resolves_explicit_project_name_outside_repos(self):
+        r = S.task_start(self.con, "improve LoopFix booking validation",
+                         cwd=str(pathlib.Path(self.tmp.name)))
+        self.assertEqual(r.get("project"), "loopfix")
 
 
 class TestSessionEpisode(Base):
@@ -168,7 +174,7 @@ class TestSessionEpisode(Base):
             [sys.executable, str(ROOT / "src" / "cortex" / "mcp_server.py")],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True)
-        frames = ['[1,2,3]', '"hello"', '42', 'null',
+        frames = ['{', '[1,2,3]', '"hello"', '42', 'null',
                   '{"jsonrpc":"2.0","id":5,"method":"tools/call"}',
                   '{"jsonrpc":"2.0","id":6,"method":"tools/list"}']
         outs = []
@@ -181,7 +187,13 @@ class TestSessionEpisode(Base):
             alive = srv.poll() is None
         finally:
             srv.terminate()
+            try:
+                srv.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                srv.kill()
+                srv.communicate()
         self.assertTrue(alive)
+        self.assertTrue(any(o.get("error", {}).get("code") == -32700 for o in outs))
         self.assertTrue(any("error" not in o and o.get("id") == 6 for o in outs))
         self.assertTrue(all(o.get("error") is None or True for o in outs))
 
@@ -226,7 +238,7 @@ class TestPromotionDecay(Base):
 
         # decay: wipe evidence from db (simulate files deleted upstream) -> obsolete
         self.con.execute("DELETE FROM files WHERE project_id='loopfix'")
-        d = S.decay_check(self.con, "loopfix")
+        S.decay_check(self.con, "loopfix")
         st = self.con.execute("SELECT status FROM episodes WHERE id=?", (eid,)).fetchone()
         self.assertEqual(st["status"], "obsolete")
         mem2 = self.con.execute("SELECT status FROM memories WHERE id=?", (mid,)).fetchone()
@@ -238,6 +250,12 @@ if __name__ == "__main__":
 
 
 class TestHardening(Base):
+    def test_dirty_session_is_not_labeled_fresh(self):
+        (self.repo / "src" / "dirty.ts").write_text("export const dirty = true\n")
+        r = S.task_start(self.con, "booking dirty state", project="loopfix",
+                         cwd=str(self.repo))
+        self.assertEqual(r["freshness"], "dirty")
+
     def test_dirty_at_start_excluded_from_session_evidence(self):
         # pre-existing dirt unrelated to the task
         (self.repo / "src" / "unrelated.txt").write_text("pre-existing\n")

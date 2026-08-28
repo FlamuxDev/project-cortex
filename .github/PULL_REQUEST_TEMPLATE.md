@@ -18,8 +18,8 @@
 - [ ] `python -m unittest discover tests` passes locally
 - [ ] New logic covered by tests (fixture repos in `tests/`, no real index touched)
 - [ ] Any newly persisted text passes secret redaction (`cortex.langs.redact`)
-- [ ] Retrieval/packet changes: reran `scripts/retrieval_eval.py` and report numbers below
-      (measured vs simulated clearly labeled)
+- [ ] Retrieval/packet changes include a focused public fixture regression test
+- [ ] Maintainer only: private retrieval eval rerun and results labeled measured/simulated
 
 ```
 <eval output / score>

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json, pathlib, re, subprocess
 
 from cortex.langs import redact
+from cortex.db import code_root
 from cortex import search
 
 VALID_OUTCOMES = ("implemented", "tested", "verified", "failed", "partial", "abandoned")
@@ -63,10 +64,27 @@ def _git(path: str, *args: str) -> str:
     return r.stdout if r.returncode == 0 else ""
 
 
-def live_git(project_path: str) -> dict:
+def live_git(project_path: str, indexed_commit: str | None = None) -> dict:
+    """Read current git state, including a live commit distance when possible."""
     head = _git(project_path, "rev-parse", "HEAD").strip()[:12]
     dirty = sum(1 for l in _git(project_path, "status", "--porcelain").splitlines() if l.strip())
-    return {"head": head, "dirty": dirty}
+    indexed = (indexed_commit or "")[:12]
+    behind: int | None = 0 if head and indexed and head == indexed else None
+    if head and indexed and head != indexed:
+        count = _git(project_path, "rev-list", "--count", f"{indexed}..{head}").strip()
+        if count.isdigit():
+            behind = int(count)
+    return {"head": head, "dirty": dirty, "indexed": indexed, "behind": behind}
+
+
+def freshness_status(gitinfo: dict) -> str:
+    """Compact machine-readable freshness state shared by CLI and MCP."""
+    if not gitinfo.get("head"):
+        return "no_git"
+    changed_head = gitinfo.get("head") != gitinfo.get("indexed")
+    if gitinfo.get("dirty"):
+        return "behind/dirty" if changed_head else "dirty"
+    return "behind" if changed_head else "fresh"
 
 
 # ---------- packet parsing for suggestions ----------
@@ -109,13 +127,12 @@ def task_start(con, task: str, project: str | None = None, budget: int = 3000,
     except ValueError as e:
         return {"error": str(e)}
     if not pid:
-        pid = search.detect_project(con, task)
+        pid = search.detect_named_project(con, task)
     p = con.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone() if pid else None
     if not p:
         return {"error": f"no project resolved for task {task!r}; pass --project"}
-    gitinfo = live_git(p["path"])
-    fresh = "fresh" if gitinfo["head"] == (p["indexed_commit"] or "")[:12] else \
-        ("behind/dirty" if gitinfo["head"] else "no_git")
+    gitinfo = live_git(code_root(p), p["indexed_commit"])
+    fresh = freshness_status(gitinfo)
     ctx = ctx_fn(con, task, project_id=pid, budget=budget)
     if "error" in ctx:
         return ctx
@@ -138,7 +155,7 @@ def task_start(con, task: str, project: str | None = None, budget: int = 3000,
 
 def _dirty_list(p) -> list[str]:
     out = []
-    for line in _git(p["path"], "status", "--porcelain").splitlines():
+    for line in _git(code_root(p), "status", "--porcelain").splitlines():
         if line.strip():
             out.append(line[3:].strip().split(" -> ")[-1])
     return out[:200]
@@ -175,17 +192,17 @@ def changed_files(prow, start_head: str, dirty_at_start: list[str] | None = None
                   ) -> tuple[list[str], bool]:
     """Files changed BY THIS SESSION: committed range + new worktree dirt,
     excluding files that were already dirty before the task started."""
-    end_head = _git(prow["path"], "rev-parse", "HEAD").strip()
+    end_head = _git(code_root(prow), "rev-parse", "HEAD").strip()
     paths: set[str] = set()
     all_committed = True
     committed_range: set[str] = set()
     if start_head and end_head:
-        out = _git(prow["path"], "diff", "--name-only", f"{start_head}..{end_head}")
+        out = _git(code_root(prow), "diff", "--name-only", f"{start_head}..{end_head}")
         committed_range = {l.strip() for l in out.splitlines() if l.strip()}
         paths |= committed_range
     pre_existing = set(dirty_at_start or [])
     wt = [l[3:].strip().split(" -> ")[-1]
-          for l in _git(prow["path"], "status", "--porcelain").splitlines()]
+          for l in _git(code_root(prow), "status", "--porcelain").splitlines()]
     for w in wt:
         if not w:
             continue
@@ -206,7 +223,7 @@ def symbols_touched(con, prow, files: list[str], since_head: str | None) -> dict
             "SELECT name FROM symbols WHERE project_id=? AND path=?", (prow["id"], f))]
         if not syms:
             continue
-        patch = _git(prow["path"], "diff", rng, "--", f)[:20000]
+        patch = _git(code_root(prow), "diff", rng, "--", f)[:20000]
         hit = [s for s in syms if s in patch]
         if hit:
             res[f] = hit[:15]
@@ -269,9 +286,9 @@ def task_complete(con, session_id: int, outcome: str = "implemented",
         raise ValueError("no file changes recorded for this session; "
                          "use --outcome implemented/partial, or make and commit the change first")
 
-    end_git = live_git(prow["path"]) if prow else {"head": "", "dirty": 0}
+    end_git = live_git(code_root(prow), prow["indexed_commit"]) if prow else {"head": "", "dirty": 0}
     final_sha = commit_sha or (end_git["head"] if (all_committed and end_git["head"]) else None)
-    commits_in_range = len(_git(prow["path"], "log", "--oneline",
+    commits_in_range = len(_git(code_root(prow), "log", "--oneline",
                                 f"{s['start_head']}..{end_git['head']}").splitlines()) \
         if (prow and s["start_head"] and end_git["head"]) else 0
     metrics["commits_in_range"] = commits_in_range

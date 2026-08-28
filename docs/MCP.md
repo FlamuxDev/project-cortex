@@ -10,19 +10,20 @@ cortex serve
 
 - **stdio transport, one process per client session.** Your MCP client spawns `cortex serve` and talks newline-delimited JSON-RPC on stdin/stdout. No daemon, no ports.
 - The server opens its SQLite connection at startup; concurrent clients each get their own process — SQLite WAL mode handles this safely.
-- Project resolution: explicit `project` argument wins; otherwise the project is detected from the client's working directory (the repo the agent is operating in). Ambiguity returns an error listing candidates rather than guessing.
+- Project resolution: explicit `project` wins, then optional `cwd`, then an explicit project name in the task, then the server process's working directory. Long-lived servers should receive `project` or `cwd`; the server cannot observe an editor's later directory changes. Ambiguity returns an error rather than guessing from generic task vocabulary.
 - Handshake: `initialize` → `notifications/initialized` → `tools/list` / `tools/call`.
 
 ## Tools (16)
 
 ### cortex_task_start
 
-Starts a tracked task session: auto-detects the project, checks freshness against live git, returns a full context packet, and stores suggested files/symbols/tests for later precision scoring.
+Starts a tracked task session, checks freshness against live git, returns a full context packet, and stores suggested files/symbols/tests for later precision scoring.
 
 | Arg | Type | Required | Notes |
 |---|---|---|---|
 | `task` | string | ✓ | natural-language task |
 | `project` | string | | overrides cwd detection |
+| `cwd` | string | | absolute client workspace path when `project` is omitted |
 | `budget` | number | | default 3000 |
 
 Call this FIRST for any non-trivial task. When done, call `cortex_task_complete` with the returned session id.
@@ -74,6 +75,7 @@ Budgeted context packet without session tracking. Same packet as `cortex_task_st
 |---|---|---|---|
 | `task` | string | ✓ | |
 | `project` | string | | |
+| `cwd` | string | | absolute client workspace path when `project` is omitted |
 | `budget` | number | | default 4000 |
 
 Cross-project phrasing ("across projects", "elsewhere", "have we …") auto-switches to cross-project round-robin results grouped by project.
@@ -187,11 +189,11 @@ Tests mapped to a target file (unit/integration/e2e, DIRECT flag = test directly
 
 ### cortex_projects
 
-List all indexed projects: id, kind, freshness vs stored index, languages. No args.
+List all indexed projects: id, kind, live git/worktree freshness, languages. No args.
 
 ### cortex_status
 
-Per-project counts (files/symbols/modules/flows/apis/tests/stale memories) and last-index time.
+Per-project live git/worktree freshness, code root, counts (files/symbols/modules/flows/apis/tests/stale memories), and last-index time.
 
 | Arg | Type | Required |
 |---|---|---|

@@ -3,7 +3,8 @@ from __future__ import annotations
 import argparse, json, pathlib, shutil, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
-from cortex.db import connect
+from cortex import __version__
+from cortex.db import code_root, connect
 from cortex import indexer, search
 from cortex.contextpack import context_text, impact as impact_fn
 
@@ -11,7 +12,23 @@ from cortex.contextpack import context_text, impact as impact_fn
 def cmd_projects(args):
     con = connect()
     for p in con.execute("SELECT * FROM projects ORDER BY id"):
-        print(f"{p['id']:18} {p['kind'] or '?':10} fresh={'yes' if p['git_head']==p['indexed_commit'] else 'STALE':6} files={con.execute('SELECT COUNT(*) FROM files WHERE project_id=?', (p['id'],)).fetchone()[0]:5}  {p['path']}")
+        nfiles = con.execute("SELECT COUNT(*) FROM files WHERE project_id=?", (p["id"],)).fetchone()[0]
+        # LIVE state — stored git_head/indexed_commit go stale silently
+        f = _freshness(con, p["id"])
+        state = _project_health(con, p) or (f["status"].lower() if f else "unknown")
+        print(f"{p['id']:18} {p['kind'] or '?':10} {state:28} files={nfiles:5}  {code_root(p)}")
+
+
+def _project_health(con, prow) -> str | None:
+    """Return a warning string if the project no longer matches disk, else None."""
+    root = pathlib.Path(code_root(prow))
+    if not root.is_dir():
+        return "!! PATH GONE"
+    sample = [r["path"] for r in con.execute(
+        "SELECT path FROM files WHERE project_id=? ORDER BY importance DESC LIMIT 20", (prow["id"],))]
+    if sample and not any((root / s).exists() for s in sample):
+        return "!! PHANTOM (indexed files gone)"
+    return None
 
 
 def _freshness(con, pid):
@@ -19,41 +36,41 @@ def _freshness(con, pid):
     if not p:
         return None
     # LIVE git state — never trust stored values for freshness
-    import subprocess
-    head = subprocess.run(["git", "-C", p["path"], "rev-parse", "HEAD"],
-                          capture_output=True, text=True).stdout.strip() or None
-    dirty = len([l for l in subprocess.run(["git", "-C", p["path"], "status", "--porcelain"],
-                 capture_output=True, text=True).stdout.splitlines() if l.strip()])
-    behind = 0
-    if head and p["indexed_commit"] and head[:12] != p["indexed_commit"][:12]:
-        row = con.execute("""SELECT COUNT(*) c FROM commits WHERE project_id=? AND date >=
-                             COALESCE((SELECT date FROM commits WHERE project_id=? AND sha LIKE ?),'1970-01-01')""",
-                          (pid, pid, p["indexed_commit"][:12] + "%")).fetchone()
-        behind = max(row["c"] - 1, 0)
-    return {"head": (head or "")[:12], "indexed": (p["indexed_commit"] or "")[:12],
-            "behind": behind, "dirty": dirty,
-            "status": ("FRESH" if behind == 0 else f"BEHIND {behind} commits")
-                      + (f" (+{dirty} uncommitted)" if dirty else "")}
+    from cortex.session import freshness_status, live_git
+    root = code_root(p)
+    info = live_git(root, p["indexed_commit"])
+    state = freshness_status(info)
+    labels = {
+        "fresh": "FRESH",
+        "dirty": f"DIRTY ({info['dirty']} uncommitted)",
+        "behind/dirty": f"BEHIND + DIRTY ({info['dirty']} uncommitted)",
+        "no_git": "NO GIT",
+    }
+    info["status"] = labels.get(state, f"BEHIND {info['behind'] or '?'} commits")
+    return info
 
 
 def cmd_status(args):
     con = connect()
-    pid = args.project or (search.detect_project(con, args.task) if args.task else None)
+    pid = args.project or (search.detect_named_project(con, args.task) if args.task else None)
     if not pid:
         total_files = con.execute("SELECT COUNT(*) c FROM files").fetchone()["c"]
         total_syms = con.execute("SELECT COUNT(*) c FROM symbols").fetchone()["c"]
         nproj = con.execute("SELECT COUNT(*) c FROM projects").fetchone()["c"]
-        print(f"cortex v0.1 | projects: {nproj} | files indexed: {total_files} | symbols: {total_syms}")
+        print(f"cortex v{__version__} | projects: {nproj} | files indexed: {total_files} | symbols: {total_syms}")
         print("run `cortex projects` for the list")
         return
     p = con.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone()
+    if not p:
+        print(f"unknown project '{pid}' (run `cortex projects` for valid ids)")
+        raise SystemExit(2)
     f = _freshness(con, pid)
     def count(sql):
         return con.execute(sql, (pid,)).fetchone()[0]
     print(f"Project:   {p['name']} ({pid})")
-    print(f"Path:      {p['path']}")
+    print(f"Path:      {code_root(p)}")
     print(f"HEAD:      {f['head']}   Brain commit: {f['indexed']}")
-    print(f"Freshness: {f['status']}" + (f" (+{f['dirty']} dirty)" if f['dirty'] else ""))
+    print(f"Freshness: {f['status']}")
     print(f"Files:     {count('SELECT COUNT(*) FROM files WHERE project_id=?')}")
     print(f"Symbols:   {count('SELECT COUNT(*) FROM symbols WHERE project_id=?')}")
     print(f"Modules:   {count('SELECT COUNT(*) FROM modules WHERE project_id=?')}")
@@ -193,17 +210,31 @@ def cmd_doctor(args):
     con = connect()
     issues = []
     for p in con.execute("SELECT * FROM projects"):
-        path = pathlib.Path(p["path"])
+        path = pathlib.Path(code_root(p))
         if not path.exists():
-            issues.append(f"MISSING: project dir gone: {p['path']}")
+            issues.append(f"MISSING: project dir gone: {path} -> the brain still serves its rows")
             continue
+        # a surviving directory proves nothing: the code may have moved or been
+        # replaced (a bind-mount husk still passes exists())
+        sample = [r["path"] for r in con.execute(
+            "SELECT path FROM files WHERE project_id=? ORDER BY importance DESC LIMIT 20", (p["id"],))]
+        alive = sum(1 for s in sample if (path / s).exists())
+        if sample and alive == 0:
+            issues.append(f"PHANTOM: {p['id']} — none of its indexed files exist under {path}; "
+                          f"packets will cite code that is gone")
+        elif sample and alive < len(sample) // 2:
+            issues.append(f"DRIFT: {p['id']} — only {alive}/{len(sample)} sampled files still exist "
+                          f"-> cortex update {p['id']}")
         f = _freshness(con, p["id"])
         if f is None:
             continue
-        if f["behind"] > 20:
-            issues.append(f"STALE: {p['id']} brain behind by ~{f['behind']} commits -> cortex update {p['id']}")
-        elif f["behind"] > 0:
-            issues.append(f"DRIFT: {p['id']} behind by ~{f['behind']} commits")
+        behind = f.get("behind")
+        if behind is not None and behind > 20:
+            issues.append(f"STALE: {p['id']} brain behind by {behind} commits -> cortex update {p['id']}")
+        elif behind is not None and behind > 0:
+            issues.append(f"DRIFT: {p['id']} behind by {behind} commits")
+        elif f.get("head") and f.get("head") != f.get("indexed"):
+            issues.append(f"DRIFT: {p['id']} HEAD differs from index (distance unavailable)")
         if not p["indexed_commit"] and p["git_head"]:
             issues.append(f"NOINDEX: {p['id']} git repo never committed to brain")
     try:
@@ -229,8 +260,10 @@ def cmd_doctor(args):
     if "hunter22" in redact("password: 'hunter22'"):
         issues.append("REDACTION: pattern check failed — do not persist until fixed")
     # MCP protocol round-trip (real subprocess, real JSON-RPC)
+    import subprocess as _sp
+    srv = None
     try:
-        import json as _json, subprocess as _sp
+        import json as _json
         srv = _sp.Popen([sys.executable, str(pathlib.Path(__file__).parent / "mcp_server.py")],
                         stdin=_sp.PIPE, stdout=_sp.PIPE, stderr=_sp.DEVNULL, text=True)
         def rpc(obj):
@@ -244,11 +277,18 @@ def cmd_doctor(args):
         ok = (hello.get("result", {}).get("serverInfo", {}).get("name") == "project-cortex"
               and any(t["name"] == "cortex_context" for t in tools.get("result", {}).get("tools", []))
               and "content" in call.get("result", {}))
-        srv.terminate()
         if not ok:
             issues.append("MCP: protocol round-trip failed (initialize/tools/call)")
     except Exception as e:
         issues.append(f"MCP: self-test error: {e}")
+    finally:
+        if srv is not None:
+            srv.terminate()
+            try:
+                srv.communicate(timeout=5)
+            except _sp.TimeoutExpired:
+                srv.kill()
+                srv.communicate()
     # learning loop
     from cortex.session import decay_check, quality_report
     d = decay_check(con)
@@ -260,6 +300,21 @@ def cmd_doctor(args):
         print(f"info: {q['episodes_obsolete']} obsolete + {q['episodes_uncertain']} uncertain episodes; "
               f"review with `cortex episode list`")
     print("\n".join(issues) if issues else "all checks passed")
+
+
+def _this_executable() -> str:
+    """Absolute path to the cortex entry point actually running us.
+
+    shutil.which() would resolve via PATH and can point at a *different*
+    install, so agents get wired to the wrong binary. Prefer argv[0].
+    """
+    argv0 = pathlib.Path(sys.argv[0])
+    if argv0.name.startswith("cortex") and argv0.exists():
+        return str(argv0.resolve())
+    which = shutil.which("cortex")
+    if which:
+        return str(pathlib.Path(which).resolve())
+    return f"{sys.executable} -m cortex.cli"  # module invocation fallback
 
 
 def cmd_init(args):
@@ -287,7 +342,7 @@ def cmd_init(args):
         stats = indexer.index_project(con, proj, full=True)
         print(f"indexed {proj['id']}: {stats}")
 
-    exe = shutil.which("cortex") or str(pathlib.Path(__file__).resolve())
+    exe = _this_executable()
     print(
         f"\n✓ {len(mine)} project(s) registered. Root saved to "
         f"{discovery.cortex_home() / 'config.json'}\n"
@@ -358,9 +413,11 @@ def _run_task(args, S, con):
         pid = s["project_id"]
         import subprocess
         sha = None
-        head = subprocess.run(["git", "-C", con.execute("SELECT path FROM projects WHERE id=?", (pid,)).fetchone()[0],
+        prow = con.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone()
+        root = code_root(prow)
+        head = subprocess.run(["git", "-C", root,
                                "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-        dirty = subprocess.run(["git", "-C", con.execute("SELECT path FROM projects WHERE id=?", (pid,)).fetchone()[0],
+        dirty = subprocess.run(["git", "-C", root,
                                 "status", "--porcelain"], capture_output=True, text=True).stdout
         if not dirty and head:
             sha = head[:12]
@@ -413,7 +470,7 @@ def cmd_episode(args):
 def cmd_quality(args):
     from cortex.session import quality_report
     q = quality_report(connect())
-    print(f"Cortex Quality")
+    print("Cortex Quality")
     print(f"sessions started/completed : {q['sessions_started']} / {q['sessions_completed']}")
     print(f"episodes active/total      : {q['episodes_active']} / {q['episodes_total']}"
           f"  (failed-lesson {q['episodes_failed_lessons']}, uncertain {q['episodes_uncertain']}, obsolete {q['episodes_obsolete']})")
@@ -425,6 +482,7 @@ def cmd_quality(args):
 
 def main():
     ap = argparse.ArgumentParser(prog="cortex", description="Project Cortex — engineering brain")
+    ap.add_argument("--version", action="version", version=f"cortex {__version__}")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("projects").set_defaults(fn=cmd_projects)

@@ -4,12 +4,25 @@ Generated files carry frontmatter `cortex-generated: true`; anything else is
 treated as human-curated and never overwritten.
 """
 from __future__ import annotations
-import json, pathlib, re, sys
+import json, pathlib, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from cortex.db import connect
 
 VAULT = pathlib.Path(__file__).resolve().parents[2] / "vault"
+
+# Paths written during the current generate() run; anything generated but absent
+# from this set is a leftover whose source row is gone, and gets pruned.
+_WRITTEN: set[pathlib.Path] = set()
+
+
+def _clip(s: str, n: int) -> str:
+    """Trim to n chars on a word boundary, marking that it was trimmed."""
+    s = str(s or "").strip()
+    if len(s) <= n:
+        return s
+    cut = s[:n].rsplit(" ", 1)[0]
+    return (cut or s[:n]) + " …"
 
 
 def fm(title, tags, extra=""):
@@ -26,9 +39,29 @@ def is_generated(p: pathlib.Path) -> bool:
 
 def w(path: pathlib.Path, content: str):
     path.parent.mkdir(parents=True, exist_ok=True)
+    _WRITTEN.add(path.resolve())
     if path.exists() and not is_generated(path):
         return  # never clobber human notes
     path.write_text(content)
+
+
+def prune(root: pathlib.Path | None = None) -> list[pathlib.Path]:
+    """Delete generated pages this run did not write — their source row is gone.
+
+    Human notes (no `cortex-generated: true`) are never touched, and neither is
+    anything outside the vault.
+    """
+    root = root or VAULT
+    removed = []
+    for f in sorted(root.rglob("*.md")):
+        if f.resolve() in _WRITTEN or not is_generated(f):
+            continue
+        f.unlink()
+        removed.append(f)
+    for d in sorted(root.rglob("*"), reverse=True):   # drop dirs left empty
+        if d.is_dir() and not any(d.iterdir()):
+            d.rmdir()
+    return removed
 
 
 def project_status(con, pid):
@@ -255,6 +288,7 @@ def _deep_pages(con, pid: str, prow) -> int:
 
 def generate(con):
     from cortex.session import quality_report
+    _WRITTEN.clear()
     n = {"files": 0}
     projs = [r["id"] for r in con.execute("SELECT id FROM projects ORDER BY id")]
 
@@ -321,6 +355,17 @@ def generate(con):
     body += [f"- [{m['scope']}] {m['project_id'] or 'GLOBAL'}: {m['title']}" for m in stale] or ["- none"]
     body += ["", "## Uncertain/obsolete episodes (contradiction candidates)"]
     body += [f"- #{e['id']} {e['project_id']}: {e['task'][:90]}" for e in uncertain_eps] or ["- none"]
+
+    # full memory inventory — the flagged list above is a subset, not the whole store
+    allmem = con.execute("""SELECT scope, project_id, title, stale, status, confidence
+                            FROM memories ORDER BY project_id IS NOT NULL, project_id, id""").fetchall()
+    body += ["", f"## All memories ({len(allmem)})", "",
+             "| Scope | Project | Memory | State |", "|---|---|---|---|"]
+    for m in allmem:
+        state = "stale" if m["stale"] else (m["status"] or "active")
+        proj = f"[[{m['project_id']}]]" if m["project_id"] else "GLOBAL"
+        title = str(m["title"] or "").replace("|", "\\|")
+        body.append(f"| {m['scope']} | {proj} | {title} | {state} |")
     w(VAULT / "Knowledge Health.md", "\n".join(body) + "\n")
     n["files"] += 1
 
@@ -415,7 +460,6 @@ def generate(con):
             byproj.setdefault(pp, t)
         if len(byproj) >= 2:
             concepts[k] = byproj
-    cp = VAULT / "Global" / "Cross Project Patterns.md"
     content = fm("patterns", "[global]") + ("# Cross-Project Patterns\n\nConcepts appearing in multiple projects.\n")
     for k, byproj in sorted(concepts.items(), key=lambda kv: -len(kv[1])):
         content += f"\n## {k.title()} — {len(byproj)} projects\n"
@@ -433,10 +477,14 @@ def generate(con):
             content += f"\n## [[{pid}]]\n"
             for r in rows:
                 sha = f" (`{r['commit_sha']}`)" if r["commit_sha"] else ""
-                content += f"- {r['title'][:120]}{sha}\n"
+                content += f"- {_clip(r['title'], 160)}{sha}\n"
     w(dp, content)
     n["files"] += 1
 
+    removed = prune()
+    n["pruned"] = len(removed)
+    if removed:
+        n["pruned_paths"] = [str(x.relative_to(VAULT)) for x in removed]
     return n
 
 

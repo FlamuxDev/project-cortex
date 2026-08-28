@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,7 @@ version = "0.3.0"
 description = "A local-first engineering brain: deterministic codebase intelligence + durable task memory for AI coding agents. CLI + MCP server."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "Project Cortex contributors" }]
 keywords = [
   "ai-agents", "mcp", "model-context-protocol", "claude", "codex", "opencode",
@@ -19,7 +19,6 @@ classifiers = [
   "Development Status :: 4 - Beta",
   "Environment :: Console",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -35,7 +34,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["build>=1.2", "pytest>=8", "ruff>=0.9", "twine>=5"]
+
+[project.urls]
+Homepage = "https://github.com/FlamuxDev/project-cortex"
+Documentation = "https://github.com/FlamuxDev/project-cortex/tree/main/docs"
+Issues = "https://github.com/FlamuxDev/project-cortex/issues"
+Source = "https://github.com/FlamuxDev/project-cortex"
 
 [project.scripts]
 cortex = "cortex.cli:main"
@@ -44,4 +49,4 @@ cortex = "cortex.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-cortex = ["migrations/*.sql"]
+cortex = ["migrations/*.sql", "data/*.json"]

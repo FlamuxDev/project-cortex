@@ -1,6 +1,6 @@
 """Git history mining: commits, co-change signals, durable lessons."""
 from __future__ import annotations
-import pathlib, re, subprocess
+import re, subprocess
 
 FIX_PAT = re.compile(r"^\s*(fix|bugfix|hotfix|revert|reapply)\b", re.I)
 
