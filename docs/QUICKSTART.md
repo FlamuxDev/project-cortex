@@ -68,9 +68,22 @@ cortex context "<task>" --budget 6000    # deep: adds symbols/callers/history/ep
 
 ## 4. Wire your agents
 
+Install the bundled Agent Skill into the user-level discovery paths for Codex,
+Claude Code, Cursor, and OpenCode:
+
+```bash
+cortex agents install
+```
+
+The command is idempotent and preserves modified skill files. Use
+`cortex agents install --scope project` from a repository when you want to
+commit team-shared skill definitions instead.
+
+Then connect the MCP server for native structured tool calls:
+
 ```bash
 # Claude Code
-claude mcp add --scope user cortex -- cortex serve
+claude mcp add --transport stdio --scope user cortex -- cortex serve
 
 # Codex CLI: ~/.codex/config.toml
 [mcp_servers.cortex]
@@ -79,6 +92,16 @@ args = ["serve"]
 
 # OpenCode: ~/.config/opencode/opencode.json
 { "mcp": { "cortex": { "type": "local", "command": ["cortex", "serve"] } } }
+```
+
+Cursor users can add this to `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "cortex": { "type": "stdio", "command": "cortex", "args": ["serve"] }
+  }
+}
 ```
 
 Generic MCP clients: spawn `cortex serve` (JSON-RPC over stdio), then `initialize` → `tools/list` → `tools/call`. See [`docs/MCP.md`](MCP.md).

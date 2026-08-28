@@ -1,186 +1,391 @@
 # Project Cortex
 
-**A local-first engineering brain for AI coding agents. Index your codebase once, retrieve narrow context forever — stop paying agents to re-explore the same repo on every task.**
+**Local-first codebase intelligence and durable engineering memory for AI coding agents.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 [![CI](https://github.com/FlamuxDev/project-cortex/actions/workflows/ci.yml/badge.svg)](https://github.com/FlamuxDev/project-cortex/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/FlamuxDev/project-cortex)](https://github.com/FlamuxDev/project-cortex/releases)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB.svg)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Cortex is an MCP server + CLI that gives any coding agent (Claude Code, Codex CLI, OpenCode, Cursor, or any MCP client) precise task context in seconds: which module owns a feature, which files and symbols matter, who calls them, which tests must run, what past tasks taught you, and what may break — all inside an explicit token budget. It doubles as an **AI agent memory**: completed tasks become episodes whose lessons resurface exactly when relevant.
+Project Cortex indexes a repository once, then gives Codex, Claude Code, Cursor,
+OpenCode, and any MCP client a narrow evidence packet for each engineering task:
+the owning module, primary files and symbols, callers, tests, blast radius, git
+history, and lessons from earlier work.
 
-## The problem
+It runs locally. There is no account, cloud service, telemetry, embedding API, or
+background daemon.
 
-- **Agents re-explore.** Every session re-greps the same tree, re-reads the same files, re-derives the same architecture map.
-- **Tokens burn.** Discovery-by-grep costs hundreds of KB of context before real work starts.
-- **Blast radius is invisible.** Agents edit shared symbols without knowing callers, served routes, or mapped tests.
-- **Lessons evaporate.** The root cause your agent found last month is gone; the next agent repeats the mistake.
+## Why Cortex
 
-## Quickstart (30 seconds)
+Coding agents are capable, but they repeatedly pay the same discovery cost:
+
+- re-reading the repository before every task;
+- spending context on broad grep results instead of the relevant code;
+- changing shared code without seeing callers, routes, schemas, or mapped tests;
+- losing root-cause knowledge when a session ends;
+- trusting stale notes after the source has changed.
+
+Cortex turns repository structure and verified task outcomes into a reusable,
+freshness-aware evidence layer.
+
+```text
+task ──> context packet ──> impact check ──> implementation ──> tests
+  ^                                                               │
+  └──────── relevant lessons <── durable episode <── task complete ┘
+```
+
+## Install and get a first result
+
+Requirements: Python 3.11+ and `git` on `PATH`.
 
 ```bash
+# Install the isolated CLI from GitHub
 pipx install git+https://github.com/FlamuxDev/project-cortex.git
-cortex init ~/code/myapp          # register + index one repo (or a dir of repos)
+
+# Register and index one repository, or point at a directory of repositories
+cortex init ~/code/myapp
+
+# Install the bundled Agent Skill for your local coding agents
+cortex agents install
+
+# Ask Cortex for a task packet
+cd ~/code/myapp
 cortex context "fix booking validation"
 ```
 
-Real packet output (abridged) — sections are priority-ordered and fit your budget:
+`uv` works as well:
 
-```
-## HEADER
-PROJECT: myapp (myapp)
-PATH: /home/me/code/myapp
-STACK: ts,tsx | frameworks: next,drizzle
-FRESHNESS: fresh
-
-## MODULE
-bookings [verified]
-purpose: reservation lifecycle — create/confirm/cancel/refund
-owns: apps/api/src/business/bookings/
-
-## PRIMARY FILES
-apps/api/src/business/bookings/service.ts
-apps/api/src/business/bookings/controller.ts
-
-## PRIMARY SYMBOLS
-apps/api/src/business/bookings/service.ts:31 class BookingService  export class BookingService {
-
-## TESTS TO RUN
-src/__tests__/bookings.test.ts (unit DIRECT)
-
-## PAST TASK LESSONS
-validated knowledge from previous tasks in this project:
-- [tested | verified] fix duplicate bookings on retry
-  Always carry the idempotency key when retrying BookingService.create.
-```
-
-If task terms don't exist in the repo, the packet says so up front:
-
-```
-## ⚠ EVIDENCE WARNING
-These task terms appear NOWHERE in this project's indexed paths/symbols: refunds.
-The feature may not exist here or uses other terminology. Matches below share only
-partial terms (validation) — verify before acting.
-```
-
-## What your agents get
-
-Run `cortex serve` and point your MCP client at it. 16 tools:
-
-| Tool | What it does |
-|---|---|
-| `cortex_task_start` | Tracked session: resolve project from id/cwd, freshness check, full briefing packet |
-| `cortex_task_complete` | Closes the session, gathers git evidence, records a durable episode with lessons |
-| `cortex_quality` | Learning-loop health: hit rates, episode counts, decay flags |
-| `cortex_context` | Budgeted context packet for a task (no tracking) |
-| `cortex_search` | Hybrid lexical+graph search across code, symbols, knowledge |
-| `cortex_impact` | Blast radius before editing: dependents, tests, APIs, DB entities, risk |
-| `cortex_module` | Module memory: purpose, owned files, invariants, pitfalls |
-| `cortex_symbol` | Definition lookup by exact name |
-| `cortex_references` | Files referencing/calling a named symbol |
-| `cortex_callers` | Callers + importers of a file (optionally one symbol) |
-| `cortex_tests` | Tests covering a file/target |
-| `cortex_projects` | All indexed projects |
-| `cortex_status` | Per-project index status/freshness |
-| `cortex_update` | Incremental re-index after pulling/committing |
-| `cortex_history` | Recent commits, filtered by path/category |
-| `cortex_changed_since` | Files changed since a given commit |
-
-Full reference with call/response sketches: [`docs/MCP.md`](docs/MCP.md)
-
-## The learning loop
-
-```
-            ┌──────────────────────────────────────────────────────┐
-            │                                                      │
-            ▼                                                      │
-      ┌──────────┐   ┌────────┐   ┌────────────┐   ┌───────────┐   │
-      │  task    │──▶│context │──▶│  impact    │──▶│ implement │   │
-      │ arrives  │   │ packet │   │ (blast     │   │           │   │
-      └──────────┘   └────────┘   │  radius)   │   └─────┬─────┘   │
-                                  └────────────┘         ▼         │
-      ┌──────────────┐   ┌──────────┐   ┌────────────────────┐     │
-      │ next task    │◀──│ episode  │◀──│ test               │     │
-      │ starts       │   │ (lessons,│   └────────────────────┘     │
-      │ smarter      │   │ evidence,│                              │
-      └──────────────┘   │ root     │         cortex task complete │
-                         │ cause)   │◀─────────────────────────────┘
-                         └──────────┘
-```
-
-Every completed task becomes an episode. Relevant lessons surface in future packets (`PAST TASK LESSONS`); failed attempts surface tagged "do not repeat". Evidence decay is checked on every update — lessons whose code vanished are flagged, never silently trusted.
-
-## Why it works without embeddings, daemons, or cloud
-
-- **Deterministic indexing.** tree-sitter (TS/TSX/JS/Go) + stdlib `ast` (Python) + regex extractors (SQL/Prisma) → SQLite + FTS5. Same input, same index, no model drift.
-- **Hybrid retrieval beats vectors here.** BM25 + IDF keyword overlap + import/call graph + memory anchors carry the retrieval eval *without* an embedding pipeline. No service to run, nothing to phone home.
-- **Local-only.** One SQLite file under `~/.cortex/data/` (override with `CORTEX_DATA_DIR`). No accounts, no sync, no telemetry.
-- **Secrets stay out.** Every signature/doc/commit subject passes redaction before insert; `.pem` dirs are excluded at discovery; env var *names* may be stored, values never.
-
-## Benchmarks
-
-Honest labels — measured on real repos, or simulated policies over real tools:
-
-| Benchmark | Result | Type |
-|---|---|---|
-| Retrieval eval (18 realistic questions, 13 projects, budget 3000) | **18/18 pass**, p50 latency 0.03s | Measured |
-| Arabic / mixed-language retrieval eval (7 questions) | **7/7 pass** | Measured |
-| Token cost to locate correct code area vs unaided grep-and-read policy | **~94% median reduction** (~174–187 KB → ~10–12 KB per task) | Simulated baseline policy over real repos |
-
-Full methodology, per-task results and stated limits: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md). Eval questions were authored by the builder against the builder's own repos — optimism bias is acknowledged there, and these are not third-party benchmarks.
-
-## How it compares
-
-| | Raw grep/exploration | CLAUDE.md-style rules only | LSP servers | Cortex |
-|---|---|---|---|---|
-| Setup | none | hand-written per repo | per-language servers | `cortex init <dir>` once |
-| Finds right file/symbol for a task | slow, token-hungry | only what you pre-wrote | precise but low-level (needs a query plan) | budgeted packet in one call |
-| Cross-file blast radius | no | no | yes (IDE-grade) | yes (retrieval-grade: callers, tests, APIs, DB) |
-| Remembers past tasks | no | no | no | episodes + lessons resurface by relevance |
-| Git intelligence (hotspots, past fixes) | no | no | no | yes |
-| Runtime | none | none | heavy, language-specific | one Python process, zero daemons |
-
-Known limitations are written down rather than glossed: [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
-
-Positioning is deliberate: Cortex is **retrieval-grade, not IDE-grade**. It finds what matters fast; LSPs rename better. They compose — Cortex tells your agent where and what to verify.
-
-## Agent setup
-
-**Claude Code**
 ```bash
-claude mcp add --scope user cortex -- cortex serve
+uv tool install git+https://github.com/FlamuxDev/project-cortex.git
 ```
 
-**Codex CLI** (`~/.codex/config.toml`)
+To develop Cortex itself:
+
+```bash
+git clone https://github.com/FlamuxDev/project-cortex.git
+cd project-cortex
+python -m venv .venv
+.venv/bin/pip install -e '.[dev]'
+python -m unittest discover tests
+```
+
+Verify the installation with:
+
+```bash
+cortex --version
+cortex doctor
+```
+
+## Agent Skill: one command, automatic discovery
+
+Cortex ships a portable [Agent Skills](https://agentskills.io) workflow at
+[`project-cortex/SKILL.md`](.agents/skills/project-cortex/SKILL.md). The skill
+teaches an agent when to start a tracked task, how to use narrow symbol and
+reference lookup, when to check impact, which tests to run, and how to preserve
+only verified lessons.
+
+Install it globally:
+
+```bash
+cortex agents install
+```
+
+The installer writes the same bundled skill to the standard user discovery
+locations without overwriting local modifications:
+
+| Agents | Discovery path |
+|---|---|
+| Codex, Cursor, OpenCode | `~/.agents/skills/project-cortex/` |
+| Claude Code | `~/.claude/skills/project-cortex/` |
+
+After that, supported agents advertise the skill automatically and select it
+when a task matches its description. You can also invoke it explicitly as
+`$project-cortex` in Codex or `/project-cortex` in clients that use slash skills.
+
+For a team-shared, repository-scoped installation, run this from the target
+repository and commit the generated skill directories:
+
+```bash
+cortex agents install --scope project
+```
+
+Re-running the command is idempotent. If an installed copy was customized,
+Cortex reports a conflict and preserves it. Use `--force` only when you intend
+to restore the version shipped with Cortex.
+
+The skill can drive the CLI by itself. For the best experience—native structured
+tool calls instead of shell commands—connect the MCP server too.
+
+## Connect the MCP server
+
+Cortex uses JSON-RPC over stdio. Every client starts its own `cortex serve`
+process; there is no port or long-running daemon to manage.
+
+### Codex
+
+Add to `~/.codex/config.toml`:
+
 ```toml
 [mcp_servers.cortex]
 command = "cortex"
 args = ["serve"]
 ```
 
-**OpenCode** (`~/.config/opencode/opencode.json`)
+### Claude Code
+
+```bash
+claude mcp add --transport stdio --scope user cortex -- cortex serve
+```
+
+### Cursor
+
+Add to `~/.cursor/mcp.json` for global use, or `.cursor/mcp.json` in one project:
+
 ```json
-{ "mcp": { "cortex": { "type": "local", "command": ["cortex", "serve"] } } }
+{
+  "mcpServers": {
+    "cortex": {
+      "type": "stdio",
+      "command": "cortex",
+      "args": ["serve"]
+    }
+  }
+}
 ```
 
-**Generic MCP client:** JSON-RPC over stdio, protocol `2024-11-05`, zero dependencies. Spawn `cortex serve`, then `initialize` → `tools/list` → `tools/call`.
+### OpenCode
 
-Then drop this into your `AGENTS.md` / `CLAUDE.md`:
+Add to `~/.config/opencode/opencode.json`:
 
-```markdown
-Before non-trivial exploration: call cortex_task_start (or `cortex context "<task>"`) and read the packet first.
-Read only the PRIMARY FILES it names. Before changing a symbol: cortex_impact. Run RELATED TESTS before done.
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "cortex": {
+      "type": "local",
+      "command": ["cortex", "serve"],
+      "enabled": true
+    }
+  }
+}
 ```
 
-For long-lived MCP processes, pass `project` (or the optional `cwd`) explicitly; a
-server process cannot reliably infer a client's changing workspace directory.
+### Any MCP client
 
-## Architecture
+Configure a local stdio server with command `cortex` and argument `serve`.
+Cortex implements MCP protocol `2024-11-05`; the lifecycle is
+`initialize` → `tools/list` → `tools/call`.
 
-Deterministic extraction → SQLite brain (FTS5) → hybrid ranking → budgeted packets. Freshness is recomputed live from git at every query; stored state is never trusted. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+For long-lived MCP processes, pass `project` or the optional `cwd` on task and
+context calls. A server process cannot observe an editor changing workspaces.
+
+## What the agent receives
+
+```text
+SESSION #42 | project=myapp | freshness=FRESH
+
+## MODULE
+bookings [verified]
+purpose: reservation lifecycle — create/confirm/cancel/refund
+
+## PRIMARY FILES
+apps/api/src/business/bookings/service.ts
+apps/api/src/business/bookings/controller.ts
+
+## PRIMARY SYMBOLS
+apps/api/src/business/bookings/service.ts:31 class BookingService
+
+## RELATED TESTS
+src/__tests__/bookings.test.ts (unit DIRECT)
+
+## PAST TASK LESSONS
+- [tested | verified] Always carry the idempotency key when retrying create.
+```
+
+Sections are priority-ordered and constrained by an explicit token budget. If
+important task terms do not appear in indexed paths, symbols, or content, Cortex
+emits an evidence warning instead of presenting a weak match as certainty.
+
+## Recommended agent workflow
+
+With MCP:
+
+1. `cortex_task_start` — resolve the project, check live freshness, and return a
+   tracked context packet.
+2. Read the packet's primary files and use `cortex_symbol`,
+   `cortex_references`, or `cortex_callers` for narrow follow-up.
+3. Call `cortex_impact` before cross-module, API, schema, or shared-symbol edits.
+4. Implement and run the packet's related tests.
+5. Call `cortex_update`, then `cortex_task_complete` with the real outcome,
+   tests, and durable lessons.
+
+CLI-only equivalent:
+
+```bash
+cortex task start "fix booking validation"
+cortex impact "BookingService"
+# edit and test
+cortex update myapp
+cortex task complete --session 42 --outcome tested \
+  --tests-run "pytest tests/test_booking.py" \
+  --lessons "Retries must preserve the booking idempotency key."
+```
+
+Completed tasks become episodes. Cortex resurfaces relevant lessons on later
+tasks and marks knowledge uncertain or obsolete when its source evidence
+changes.
+
+## MCP tools
+
+Cortex exposes 16 focused tools:
+
+| Tool | Purpose |
+|---|---|
+| `cortex_task_start` | Start a tracked task and return the full briefing packet |
+| `cortex_task_complete` | Close the session and store evidence-backed lessons |
+| `cortex_context` | Get a budgeted packet without task tracking |
+| `cortex_search` | Search code, symbols, and memory with hybrid ranking |
+| `cortex_impact` | Estimate blast radius across callers, tests, APIs, and DB entities |
+| `cortex_module` | Read module purpose, owned paths, invariants, and pitfalls |
+| `cortex_symbol` | Find an exact symbol definition |
+| `cortex_references` | Find files that reference or call a symbol |
+| `cortex_callers` | Find callers and importers of a file or symbol |
+| `cortex_tests` | Find tests mapped to a target |
+| `cortex_projects` | List indexed projects and live state |
+| `cortex_status` | Inspect freshness and index counts |
+| `cortex_update` | Incrementally re-index changed files and decay stale memory |
+| `cortex_history` | Query relevant commit history |
+| `cortex_changed_since` | List indexed files changed since a commit |
+| `cortex_quality` | Measure learning-loop coverage and health |
+
+See the complete argument and response reference in [`docs/MCP.md`](docs/MCP.md).
+
+## CLI reference
+
+| Command | Purpose |
+|---|---|
+| `cortex init <path>` | Register and fully index one repo or a directory of repos |
+| `cortex agents install` | Install the bundled global Agent Skill |
+| `cortex agents install --scope project` | Install team-shareable project skills |
+| `cortex context "<task>"` | Print a task context packet |
+| `cortex search "<query>"` | Search indexed files, symbols, and memories |
+| `cortex impact "<target>"` | Inspect likely blast radius before editing |
+| `cortex tests "<target>"` | Show mapped tests |
+| `cortex update [project]` | Incrementally refresh the index |
+| `cortex task start/complete` | Use the tracked learning loop from the shell |
+| `cortex quality` | Inspect memory and retrieval quality |
+| `cortex doctor` | Run storage, graph, redaction, migration, and MCP checks |
+| `cortex serve` | Start the stdio MCP server |
+
+Run `cortex <command> --help` for all options.
+
+## How it works
+
+```text
+repositories
+   │
+   ├─ deterministic parsers: tree-sitter + Python ast + SQL/Prisma extractors
+   ├─ git history, hotspots, freshness, and changed-file evidence
+   └─ tests, routes, imports, calls, modules, and database entities
+                         │
+                         ▼
+             local SQLite + FTS5 + graph edges
+                         │
+                         ▼
+            hybrid ranking + token-budgeted packets
+                         │
+                         ▼
+                   CLI or MCP agents
+```
+
+- TypeScript, TSX, JavaScript, Python, Go, SQL, and Prisma are indexed.
+- BM25, identifier overlap, graph proximity, and memory anchors drive retrieval.
+- SQLite WAL mode supports multiple agent clients safely.
+- Freshness is recomputed from live git state at query time.
+- Incremental updates use content hashes and do not rebuild unchanged files.
+
+This is retrieval-grade code intelligence, not an IDE-grade refactoring engine.
+Cortex finds what matters and what may break; an LSP remains better for exact
+renames and type-aware edits.
+
+## Privacy and storage
+
+All state stays under `~/.cortex` by default:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `CORTEX_HOME` | `~/.cortex` | Configuration, glossary, and data directory |
+| `CORTEX_ROOTS` | unset | Colon-separated override for indexed roots |
+| `CORTEX_DATA_DIR` | `$CORTEX_HOME/data/cortex.db` | SQLite database path |
+| `CORTEX_FTS_SYMBOL_CAP` | `100000` | Per-project symbol FTS cap |
+| `CORTEX_FTS_FILE_CAP` | `20000` | Per-project file FTS cap |
+
+Cortex does not send repository data anywhere. Signatures, documentation, and
+commit subjects pass through secret redaction before storage; private-key paths
+and common generated directories are excluded during discovery. Environment
+variable names may be indexed, but values are not.
+
+## Benchmarks
+
+| Evaluation | Result | Label |
+|---|---:|---|
+| Retrieval, 18 realistic questions across 13 projects at budget 3000 | **18/18 pass**, p50 0.03 s | Measured |
+| Arabic and mixed-language retrieval, 7 questions | **7/7 pass** | Measured |
+| Context used to locate the right code area vs a grep-and-read policy | **~94% median reduction** | Simulated baseline over real repos |
+
+The questions were authored by the builder against the builder's own repos, so
+optimism bias is possible. Methodology, raw scope, and limitations are documented
+in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
+
+## Updating and troubleshooting
+
+Upgrade the application and refresh its bundled skill:
+
+```bash
+pipx upgrade project-cortex
+cortex agents install
+cortex update
+```
+
+If the installed skill was changed or came from an older release, review the
+conflict and use `cortex agents install --force` to replace only Cortex's shipped
+files. Extra files in the skill directory are preserved.
+
+Common checks:
+
+- `cortex status --project <id>` — verify the selected project and freshness.
+- `cortex projects` — list valid project ids and roots.
+- `cortex update <id>` — refresh a packet that reports behind or dirty state.
+- `cortex doctor` — validate migrations, FTS, graph health, redaction, and a live
+  MCP round-trip.
+
+Non-git repositories are supported; only git history and commit-distance
+freshness are unavailable. Discovery requires at least three indexable code
+files per project and intentionally skips common generated directories.
+
+More help: [`docs/QUICKSTART.md`](docs/QUICKSTART.md) and
+[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
+
+## Documentation
+
+- [Quickstart](docs/QUICKSTART.md)
+- [MCP reference](docs/MCP.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Benchmarks](docs/BENCHMARKS.md)
+- [Known limitations](docs/LIMITATIONS.md)
+- [Security policy](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
 
 ## Contributing
 
-PRs welcome — conventional commits, `python -m unittest discover tests` must pass. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Issues and pull requests are welcome. Use conventional commits and run:
+
+```bash
+python -m unittest discover tests
+ruff check --select F src tests
+```
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the development workflow.
 
 ## License
 

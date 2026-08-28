@@ -1,0 +1,6 @@
+interface:
+  display_name: "Project Cortex"
+  short_description: "Repository intelligence and durable agent memory"
+  default_prompt: "Use $project-cortex to map this engineering task, assess impact, and preserve verified lessons."
+policy:
+  allow_implicit_invocation: true

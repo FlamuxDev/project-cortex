@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "project-cortex"
-version = "0.3.0"
+version = "0.4.0"
 description = "A local-first engineering brain: deterministic codebase intelligence + durable task memory for AI coding agents. CLI + MCP server."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -49,4 +49,9 @@ cortex = "cortex.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-cortex = ["migrations/*.sql", "data/*.json"]
+cortex = [
+  "migrations/*.sql",
+  "data/*.json",
+  "skills/*/*.md",
+  "skills/*/agents/*.yaml",
+]

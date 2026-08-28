@@ -348,9 +348,10 @@ def cmd_init(args):
         f"{discovery.cortex_home() / 'config.json'}\n"
         "\nNext steps:\n"
         f"  cortex context \"<task>\"          # run inside any indexed repo\n"
+        f"  cortex agents install              # install the bundled Agent Skill\n"
         f"  cortex serve                      # MCP server\n\n"
         "Wire your agents (paths resolved to this install):\n"
-        f'  Claude Code : claude mcp add --scope user cortex -- {exe} serve\n'
+        f'  Claude Code : claude mcp add --transport stdio --scope user cortex -- {exe} serve\n'
         f'  Codex       : add to ~/.codex/config.toml:\n'
         f'                  [mcp_servers.cortex]\n'
         f'                  command = "{exe}"\n'
@@ -362,6 +363,20 @@ def cmd_init(args):
 def cmd_serve(args):
     from cortex.mcp_server import serve
     serve()
+
+
+def cmd_agents(args):
+    """Install Cortex's workflow skill for supported coding agents."""
+    from cortex.agent_setup import install_agent_skill
+    results = install_agent_skill(args.scope, force=args.force)
+    for result in results:
+        mark = "!" if result["status"] == "conflict" else "✓"
+        print(f"{mark} {result['status']:9} {result['path']}")
+    if any(r["status"] == "conflict" for r in results):
+        print("existing skill differs; review it or rerun with --force "
+              "to replace shipped files")
+        raise SystemExit(2)
+    print("Project Cortex skill is ready for Codex, Claude Code, Cursor, and OpenCode.")
 
 
 BUDGETS = {"small": 2000, "normal": 4000, "deep": 8000}
@@ -498,6 +513,12 @@ def main():
     sp = sub.add_parser("history"); sp.add_argument("target", nargs="*"); sp.add_argument("--project"); sp.add_argument("--limit", type=int, default=15); sp.set_defaults(fn=cmd_history)
     sub.add_parser("doctor").set_defaults(fn=cmd_doctor)
     sub.add_parser("serve").set_defaults(fn=cmd_serve)
+    sp = sub.add_parser("agents", help="install the Project Cortex agent skill")
+    asub = sp.add_subparsers(dest="op", required=True)
+    ai = asub.add_parser("install", help="install the skill into agent discovery paths")
+    ai.add_argument("--scope", choices=["user", "project"], default="user")
+    ai.add_argument("--force", action="store_true", help="replace modified shipped skill files")
+    ai.set_defaults(fn=cmd_agents)
     sp = sub.add_parser("quality").set_defaults(fn=cmd_quality)
     sp = sub.add_parser("task"); tsub = sp.add_subparsers(dest="op", required=True)
     ts = tsub.add_parser("start"); ts.add_argument("task"); ts.add_argument("--project"); ts.add_argument("--budget", default=3000); ts.set_defaults(fn=cmd_task)
