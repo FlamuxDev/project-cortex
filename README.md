@@ -15,6 +15,24 @@ history, and lessons from earlier work.
 It runs locally. There is no account, cloud service, telemetry, embedding API, or
 background daemon.
 
+### Why it stands out
+
+- **Live Context Guard:** every task/context call fingerprints the exact indexable
+  working tree and incrementally refreshes it only when code changed. Uncommitted
+  edits are indexed but still labeled `DIRTY`; concurrent agent processes share a
+  per-project refresh lock.
+- **Architecture in one call:** `cortex_architecture` maps scale, languages, areas,
+  boundaries, entrypoints, dependency hotspots, APIs, data entities, and test shape.
+- **Git-aware preflight:** `cortex_preflight` reviews the whole current diff—not just
+  one guessed symbol—and returns risk, affected callers, public/data surfaces, and
+  the tests most likely to matter.
+- **Memory with evidence:** completed work becomes a durable episode linked to files,
+  commits, tests, and confidence; stale evidence is surfaced rather than silently
+  trusted.
+- **Portable agent workflow:** one bundled Agent Skill works across Codex, Claude
+  Code, Cursor, OpenCode, and other Agent Skills-compatible clients; MCP exposes the
+  same evidence as structured tools.
+
 ## Why Cortex
 
 Coding agents are capable, but they repeatedly pay the same discovery cost:
@@ -51,6 +69,10 @@ cortex agents install
 # Ask Cortex for a task packet
 cd ~/code/myapp
 cortex context "fix booking validation"
+
+# Understand an unfamiliar repo, then review your current changes
+cortex architecture
+cortex preflight
 ```
 
 `uv` works as well:
@@ -182,7 +204,7 @@ context calls. A server process cannot observe an editor changing workspaces.
 ## What the agent receives
 
 ```text
-SESSION #42 | project=myapp | freshness=FRESH
+SESSION #42 | project=myapp | freshness=fresh | index=refreshed
 
 ## MODULE
 bookings [verified]
@@ -210,21 +232,25 @@ emits an evidence warning instead of presenting a weak match as certainty.
 
 With MCP:
 
-1. `cortex_task_start` — resolve the project, check live freshness, and return a
-   tracked context packet.
-2. Read the packet's primary files and use `cortex_symbol`,
+1. `cortex_task_start` — resolve the project, auto-refresh changed code, and return
+   a tracked context packet.
+2. On an unfamiliar repository or architecture task, call `cortex_architecture`;
+   otherwise read the packet's primary files and use `cortex_symbol`,
    `cortex_references`, or `cortex_callers` for narrow follow-up.
 3. Call `cortex_impact` before cross-module, API, schema, or shared-symbol edits.
-4. Implement and run the packet's related tests.
-5. Call `cortex_update`, then `cortex_task_complete` with the real outcome,
-   tests, and durable lessons.
+4. Implement, then call `cortex_preflight` to review the complete Git diff and run
+   its related tests.
+5. Call `cortex_update`, then `cortex_task_complete` with the real outcome, tests,
+   and durable lessons.
 
 CLI-only equivalent:
 
 ```bash
 cortex task start "fix booking validation"
+cortex architecture                # useful on an unfamiliar repository
 cortex impact "BookingService"
 # edit and test
+cortex preflight --base HEAD        # or --base origin/main for the whole branch
 cortex update myapp
 cortex task complete --session 42 --outcome tested \
   --tests-run "pytest tests/test_booking.py" \
@@ -237,7 +263,7 @@ changes.
 
 ## MCP tools
 
-Cortex exposes 16 focused tools:
+Cortex exposes 18 focused tools:
 
 | Tool | Purpose |
 |---|---|
@@ -246,6 +272,8 @@ Cortex exposes 16 focused tools:
 | `cortex_context` | Get a budgeted packet without task tracking |
 | `cortex_search` | Search code, symbols, and memory with hybrid ranking |
 | `cortex_impact` | Estimate blast radius across callers, tests, APIs, and DB entities |
+| `cortex_architecture` | Map repository structure, boundaries, hotspots, and surfaces |
+| `cortex_preflight` | Map a Git diff to risk, dependents, APIs/data, and tests |
 | `cortex_module` | Read module purpose, owned paths, invariants, and pitfalls |
 | `cortex_symbol` | Find an exact symbol definition |
 | `cortex_references` | Find files that reference or call a symbol |
@@ -270,6 +298,8 @@ See the complete argument and response reference in [`docs/MCP.md`](docs/MCP.md)
 | `cortex context "<task>"` | Print a task context packet |
 | `cortex search "<query>"` | Search indexed files, symbols, and memories |
 | `cortex impact "<target>"` | Inspect likely blast radius before editing |
+| `cortex architecture` | Print the repository's structural map and hotspots |
+| `cortex preflight [--base origin/main]` | Review current/branch changes and tests before merge |
 | `cortex tests "<target>"` | Show mapped tests |
 | `cortex update [project]` | Incrementally refresh the index |
 | `cortex task start/complete` | Use the tracked learning loop from the shell |
@@ -301,8 +331,10 @@ repositories
 - TypeScript, TSX, JavaScript, Python, Go, SQL, and Prisma are indexed.
 - BM25, identifier overlap, graph proximity, and memory anchors drive retrieval.
 - SQLite WAL mode supports multiple agent clients safely.
-- Freshness is recomputed from live git state at query time.
-- Incremental updates use content hashes and do not rebuild unchanged files.
+- The Live Context Guard content-fingerprints indexable changes before task/context,
+  refreshes incrementally, and serializes concurrent refreshes per project.
+- Versioned index markers trigger a safe one-time derived-data repair when indexing
+  logic changes; a clean repository does not need a cold re-parse after upgrading.
 
 This is retrieval-grade code intelligence, not an IDE-grade refactoring engine.
 Cortex finds what matters and what may break; an LSP remains better for exact

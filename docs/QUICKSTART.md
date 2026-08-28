@@ -66,6 +66,19 @@ cortex context "<task>" --budget small   # 2000 tokens: header + module + primar
 cortex context "<task>" --budget 6000    # deep: adds symbols/callers/history/episodes
 ```
 
+Task and context calls use the Live Context Guard by default: Cortex fingerprints the
+indexable working tree and incrementally refreshes only when code changed. Use
+`--refresh never` only to diagnose an intentionally stale index, or `--refresh force`
+to force an incremental pass.
+
+For a fast repository tour and a change review:
+
+```bash
+cortex architecture                     # areas, boundaries, hotspots, APIs/data/tests
+cortex preflight                         # uncommitted + staged changes vs HEAD
+cortex preflight --base origin/main      # the entire branch diff plus worktree changes
+```
+
 ## 4. Wire your agents
 
 Install the bundled Agent Skill into the user-level discovery paths for Codex,
@@ -154,8 +167,10 @@ breaking search.
 ## Daily loop
 
 ```bash
-cortex update                 # incremental re-index after pulling/committing
+cortex architecture           # one-call onboarding map for an unfamiliar repo
 cortex impact "src/auth.ts"   # blast radius before risky edits
+cortex preflight              # review the complete current diff + selected tests
+cortex update                 # explicit final refresh before task completion
 cortex doctor                 # health checks incl. live MCP round-trip + redaction self-test
 ```
 
@@ -177,6 +192,10 @@ python -m unittest discover tests     # stdlib unittest suite, no fixtures neede
 
 **Project not detected when running commands:** pass `--project <id>` explicitly, or run inside the repo — cwd detection wins otherwise.
 
-**Packet says the brain is behind by N commits:** someone committed since indexing. Run `cortex update <project>` (or `cortex update` for all roots).
+**Packet says `AUTO-REFRESH FAILED` or `WORKTREE CHANGED DURING INDEX`:** verify the
+named files directly, then run `cortex context "<task>" --refresh force` after the
+worktree settles.
 
-**Packet says `DIRTY`:** uncommitted code may differ from the last index. Run `cortex update <project>` or verify the cited files directly before editing.
+**Packet says `DIRTY`:** the Live Context Guard includes current indexable code edits,
+but the repository is still uncommitted. Treat that as a source-control warning, and
+verify critical edits if another process is changing the same worktree.

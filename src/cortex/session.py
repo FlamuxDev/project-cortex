@@ -119,7 +119,7 @@ def parse_suggestions(packet: str) -> dict:
 # ---------- session lifecycle ----------
 
 def task_start(con, task: str, project: str | None = None, budget: int = 3000,
-               cwd: str | None = None) -> dict:
+               cwd: str | None = None, refresh: str = "auto") -> dict:
     from cortex.contextpack import context as ctx_fn  # lazy: contextpack lazily imports session
     pid = None
     try:
@@ -131,11 +131,14 @@ def task_start(con, task: str, project: str | None = None, budget: int = 3000,
     p = con.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone() if pid else None
     if not p:
         return {"error": f"no project resolved for task {task!r}; pass --project"}
-    gitinfo = live_git(code_root(p), p["indexed_commit"])
-    fresh = freshness_status(gitinfo)
-    ctx = ctx_fn(con, task, project_id=pid, budget=budget)
+    ctx = ctx_fn(con, task, project_id=pid, budget=budget, refresh=refresh)
     if "error" in ctx:
         return ctx
+    # Re-read after context's optional refresh: the indexed commit can advance.
+    p = con.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone()
+    gitinfo = live_git(code_root(p), p["indexed_commit"])
+    sync = ctx.get("index_sync") or {}
+    fresh = freshness_status(gitinfo)
     sug = parse_suggestions(ctx["packet"])
     cur = con.execute(
         """INSERT INTO task_sessions(project_id, task, start_head, brain_freshness, context_chars,
@@ -147,8 +150,10 @@ def task_start(con, task: str, project: str | None = None, budget: int = 3000,
     con.commit()
     sid = cur.lastrowid
     log_event(con, sid, "context", f"budget={budget} tokens~{ctx.get('tokens_est')}")
+    log_event(con, sid, "index_sync", sync.get("status", "unknown"))
     return {"session_id": sid, "project": pid, "freshness": fresh,
             "tokens_est": ctx.get("tokens_est"), "packet": ctx["packet"],
+            "index_sync": sync,
             **{f"suggested_{k}": v for k, v in sug.items()},
             "_hint": "`cortex impact` before risky edits; `cortex task complete` when done"}
 

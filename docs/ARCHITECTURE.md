@@ -11,8 +11,8 @@ A condensed tour of the system. Honest caveats live in [`LIMITATIONS.md`](LIMITA
         MCP stdio │              │impact reports
                   ▼              │
             ┌─────────────────────────┐
-            │   Context Selection     │  priority-ordered sections,
-            │   Engine                │  assembled under a char budget
+            │ Live Guard + Context    │  versioned working-tree snapshot,
+            │ Selection + Preflight   │  packets / architecture / diff risk
             └───┬──────────┬──────────┘
                 │          │
    ┌────────────▼───┐  ┌───▼──────────────┐
@@ -45,7 +45,19 @@ A condensed tour of the system. Honest caveats live in [`LIMITATIONS.md`](LIMITA
 - Next.js App Router conventions (`app/**/route.ts`) resolved at the indexer level.
 - Import resolution: relative paths, `@/`+`~/` aliases, monorepo suffix fallback; unresolved imports stay in `refs` and feed impact's barrel-reexport fallback.
 
-**Indexing** — full or incremental. Incremental diffs sha1 content hashes, re-extracts only changed files, rebuilds changed test mappings, marks intersecting memories stale, appends new git commits, recomputes importance, and replaces per-project FTS rows. Orphan FTS rows are pruned so removed symbols cannot leak into later searches. Seconds, not minutes.
+**Indexing** — full or incremental. Incremental diffs sha1 content hashes, re-extracts only changed files, rebuilds changed test mappings, marks intersecting memories stale, appends new git commits, recomputes importance, and replaces per-project FTS rows. Orphan FTS rows are pruned so removed symbols cannot leak into later searches. Versioned index-format markers trigger a one-time derived-data repair; clean repositories do not need a cold re-parse after upgrading.
+
+**Live Context Guard** fingerprints HEAD plus the contents of dirty indexable paths
+(or all indexable files outside Git). Before task/context/architecture/preflight calls,
+it skips work when the marker matches, otherwise runs an incremental refresh under an
+atomic per-project lock. Locks recover immediately when their owner process dies and
+also have a conservative stale timeout. The marker is recorded only if the worktree did
+not change during indexing.
+
+**Repository intelligence** derives an architecture snapshot from indexed files and
+graph edges. Git preflight reads staged, unstaged, untracked, deleted, and renamed paths
+against a validated base, preserves pre-refresh evidence for removals, then maps the
+diff to callers, API/data surfaces, risk, and tests.
 
 **Git mining** categorizes commits (fix/feat/refactor/docs/chore), builds file→commit mappings for hotspots, co-change, and "past fixes here" warnings.
 
@@ -82,8 +94,12 @@ Nothing trusts stored state. Every packet/query recomputes live:
 - current `git rev-parse HEAD` vs `indexed_commit`
 - commit-count distance since the indexed commit
 - dirty-file count via `git status --porcelain`
+- exact fingerprint of dirty indexable paths, checked against the versioned index marker
 
-Memories whose evidence files changed after ingest are flagged `[STALE]`; packets state staleness in their header instead of pretending to be current. A dirty worktree is never labeled fresh, even when HEAD still equals the indexed commit.
+Memories whose evidence files changed after ingest are flagged `[STALE]`; packets state
+staleness in their header instead of pretending to be current. A dirty worktree is never
+labeled clean even when its code is fully indexed. Concurrent edits during refresh yield
+`unstable`, never a false current marker.
 
 ## Storage schema summary
 

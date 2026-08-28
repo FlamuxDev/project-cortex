@@ -15,9 +15,12 @@ matters to you, it matters more than anything in the benchmarks.
    below the packet budget. Embeddings remain the documented upgrade path if this turns
    out to matter in practice.
 
-3. **Dirty worktrees are flagged, not indexed.** Uncommitted files are hashed as-is at
-   update time, but memories verified against HEAD may lag a fast-moving tree. Packets
-   always state dirty counts and brain-behind distances — read them.
+3. **Dirty code is auto-indexed, but a moving worktree can still outrun a snapshot.**
+   Task/context/architecture/preflight calls fingerprint and incrementally refresh
+   uncommitted indexable paths under a per-project lock. If files change during that
+   pass, Cortex reports `unstable` and refuses to record the snapshot as current.
+   Memories verified against HEAD can still be stale, and non-code edits are deliberately
+   excluded from the index fingerprint. Packets continue to label the repo `DIRTY`.
 
 4. **Full-text symbol indexing is capped per project.** `CORTEX_FTS_SYMBOL_CAP`
    (default 100,000) and `CORTEX_FTS_FILE_CAP` (default 20,000) bound how much of a

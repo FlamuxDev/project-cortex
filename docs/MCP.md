@@ -13,11 +13,12 @@ cortex serve
 - Project resolution: explicit `project` wins, then optional `cwd`, then an explicit project name in the task, then the server process's working directory. Long-lived servers should receive `project` or `cwd`; the server cannot observe an editor's later directory changes. Ambiguity returns an error rather than guessing from generic task vocabulary.
 - Handshake: `initialize` → `notifications/initialized` → `tools/list` / `tools/call`.
 
-## Tools (16)
+## Tools (18)
 
 ### cortex_task_start
 
-Starts a tracked task session, checks freshness against live git, returns a full context packet, and stores suggested files/symbols/tests for later precision scoring.
+Starts a tracked task session, runs the Live Context Guard, returns a full context
+packet, and stores suggested files/symbols/tests for later precision scoring.
 
 | Arg | Type | Required | Notes |
 |---|---|---|---|
@@ -25,12 +26,13 @@ Starts a tracked task session, checks freshness against live git, returns a full
 | `project` | string | | overrides cwd detection |
 | `cwd` | string | | absolute client workspace path when `project` is omitted |
 | `budget` | number | | default 3000 |
+| `refresh` | `auto\|never\|force` | | default `auto` |
 
 Call this FIRST for any non-trivial task. When done, call `cortex_task_complete` with the returned session id.
 
 ```
 → tools/call {"name":"cortex_task_start","arguments":{"task":"fix booking validation"}}
-← SESSION #42 | project=myapp | freshness=FRESH | ~2140 tokens
+← SESSION #42 | project=myapp | freshness=fresh | index=refreshed | ~2140 tokens
 
 ## HEADER
 PROJECT: myapp (myapp) ...
@@ -77,6 +79,7 @@ Budgeted context packet without session tracking. Same packet as `cortex_task_st
 | `project` | string | | |
 | `cwd` | string | | absolute client workspace path when `project` is omitted |
 | `budget` | number | | default 4000 |
+| `refresh` | `auto\|never\|force` | | default `auto` |
 
 Cross-project phrasing ("across projects", "elsewhere", "have we …") auto-switches to cross-project round-robin results grouped by project.
 
@@ -119,6 +122,46 @@ Blast radius before changing a file/symbol/feature: direct dependents (callers+i
     "tests": ["src/__tests__/bookings.test.ts"],
     "apis": ["POST /bookings", "DELETE /bookings/:id"],
     "past_fixes": ["a1b2c3 2026-08-14 [fix] prevent duplicate booking on retry"] }
+```
+
+### cortex_architecture
+
+One-call repository map for onboarding and architectural work: scale, languages,
+path-inferred areas, curated modules, entrypoints, cross-area boundaries, dependency
+hotspots, API/data surfaces, and test shape.
+
+| Arg | Type | Required | Notes |
+|---|---|---|---|
+| `project` | string | | overrides cwd detection |
+| `cwd` | string | | client workspace path |
+| `refresh` | `auto\|never\|force` | | default `auto` |
+
+```
+→ tools/call {"name":"cortex_architecture","arguments":{"project":"myapp"}}
+← { "summary": {"files": 842, "symbols": 6710, "loc": 119204},
+    "boundaries": [{"from":"src/auth","to":"src/db","references":31}],
+    "hotspots": [{"path":"src/db/client.ts","inbound":42}], ... }
+```
+
+### cortex_preflight
+
+Reviews the complete Git diff against a base commit. It preserves evidence for deleted
+and renamed files, auto-refreshes the resulting tree, then returns risk reasons,
+changed areas, affected symbols, direct dependents, API/data/entry surfaces, and mapped
+tests. The base is validated as a Git revision; option-like values are rejected.
+
+| Arg | Type | Required | Notes |
+|---|---|---|---|
+| `project` | string | | overrides cwd detection |
+| `cwd` | string | | client workspace path |
+| `base` | string | | default `HEAD`; use `origin/main` for a branch review |
+| `refresh` | `auto\|never\|force` | | default `auto` |
+
+```
+→ tools/call {"name":"cortex_preflight","arguments":{"base":"origin/main"}}
+← { "risk":"high", "reasons":["touches persisted data definitions"],
+    "direct_dependents":["src/api/bookings.ts"],
+    "recommended_tests":["tests/bookings.test.ts"] }
 ```
 
 ### cortex_module
@@ -232,4 +275,6 @@ Files changed in the repo since a given commit sha (per the brain's mined histor
 - Deterministic layers (symbols, refs, routes, tables, commits) are facts from AST/git.
 - Prose memories carry `[scope/confidence]`; `[STALE]` means their evidence paths changed since ingest — verify first.
 - An `⚠ EVIDENCE WARNING` section means some task terms don't exist in that repo. Don't force a match.
-- If HEAD ≠ indexed commit, packets say so and recommend `cortex_update`.
+- Task/context/architecture/preflight calls default to `refresh=auto`. `current` and
+  `refreshed` mean the indexable working-tree fingerprint was proven current; `failed`
+  or `unstable` means critical claims must be verified in source.

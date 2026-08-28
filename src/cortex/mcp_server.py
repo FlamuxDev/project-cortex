@@ -7,6 +7,7 @@ from cortex.db import code_root, connect
 from cortex import search
 from cortex.contextpack import context as ctx_fn, impact as impact_fn
 from cortex.indexer import update_project
+from cortex.intelligence import architecture, preflight
 from cortex import session as S
 from cortex import __version__
 
@@ -29,17 +30,19 @@ def _pid(args, hint: str | None = None):
 
 def tool_context(args):
     r = ctx_fn(CON, args["task"], project_id=_pid(args, args["task"]),
-               budget=int(args.get("budget", 4000)))
+               budget=int(args.get("budget", 4000)), refresh=args.get("refresh", "auto"))
     return [{"type": "text", "text": r.get("packet") or r.get("error", "")}]
 
 
 def tool_task_start(args):
     r = S.task_start(CON, args["task"], project=_pid(args, args["task"]),
-                     budget=int(args.get("budget", 3000)))
+                     budget=int(args.get("budget", 3000)),
+                     refresh=args.get("refresh", "auto"))
     if "error" in r:
         return [{"type": "text", "text": f"error: {r['error']}"}]
     packet = r.pop("packet")
     head = [f"SESSION #{r['session_id']} | project={r['project']} | freshness={r['freshness']} "
+            f"| index={r.get('index_sync', {}).get('status', 'unknown')} "
             f"| ~{r['tokens_est']} tokens", "",
             "When done, call cortex_task_complete with this session id and durable lessons.", ""]
     return [{"type": "text", "text": "\n".join(head) + packet}]
@@ -229,9 +232,23 @@ def tool_changed_since(args):
     return [{"type": "text", "text": "\n".join(r["path"] for r in rows) or "nothing changed since that commit"}]
 
 
+def tool_architecture(args):
+    pid = _pid(args)
+    result = architecture(CON, pid, refresh=args.get("refresh", "auto"))
+    return [{"type": "text", "text": json.dumps(result, indent=1)}]
+
+
+def tool_preflight(args):
+    pid = _pid(args)
+    result = preflight(CON, pid, base=args.get("base", "HEAD"),
+                       refresh=args.get("refresh", "auto"))
+    return [{"type": "text", "text": json.dumps(result, indent=1)}]
+
+
 TOOLS = {
-    "cortex_task_start": ("Start a tracked task session: resolves project from explicit project/cwd, checks freshness, returns full context packet (module/files/symbols/tests/past lessons). Call this FIRST for any non-trivial task.",
-       {"task": {"type": "string"}, "project": {"type": "string"}, "cwd": {"type": "string"}, "budget": {"type": "number"}}, tool_task_start, ["task"]),
+    "cortex_task_start": ("Start a tracked task session: resolves the project, auto-refreshes changed code, and returns module/files/symbols/tests/past lessons. Call this FIRST for any non-trivial task.",
+       {"task": {"type": "string"}, "project": {"type": "string"}, "cwd": {"type": "string"}, "budget": {"type": "number"},
+        "refresh": {"type": "string", "enum": ["auto", "never", "force"]}}, tool_task_start, ["task"]),
     "cortex_task_complete": ("Close a task session: gathers git evidence, computes retrieval precision metrics, stores a durable episode. Pass lessons=root-cause/invariant knowledge worth remembering; outcome in implemented|tested|verified|failed|partial|abandoned.",
        {"session_id": {"type": "number"}, "outcome": {"type": "string"}, "problem": {"type": "string"},
         "root_cause": {"type": "string"}, "lessons": {"type": "string"},
@@ -239,11 +256,18 @@ TOOLS = {
         "commit_sha": {"type": "string"}}, tool_task_complete, ["session_id"]),
     "cortex_quality": ("Learning-loop health: session/episode counts, hit rates, decay flags.", {}, tool_quality, []),
     "cortex_context": ("Budgeted engineering context packet for a natural-language task (no session tracking).",
-       {"task": {"type": "string"}, "project": {"type": "string"}, "cwd": {"type": "string"}, "budget": {"type": "number"}}, tool_context, ["task"]),
+       {"task": {"type": "string"}, "project": {"type": "string"}, "cwd": {"type": "string"}, "budget": {"type": "number"},
+        "refresh": {"type": "string", "enum": ["auto", "never", "force"]}}, tool_context, ["task"]),
     "cortex_search": ("Hybrid lexical+graph search across code, symbols and knowledge.",
        {"query": {"type": "string"}, "project": {"type": "string"}}, tool_search, ["query"]),
     "cortex_impact": ("Blast-radius estimate for changing a file/symbol/feature.",
        {"target": {"type": "string"}, "project": {"type": "string"}}, tool_impact, ["target"]),
+    "cortex_architecture": ("One-call repository map: scale, languages, areas, entrypoints, module boundaries, dependency hotspots, API/data/test surfaces.",
+       {"project": {"type": "string"}, "cwd": {"type": "string"},
+        "refresh": {"type": "string", "enum": ["auto", "never", "force"]}}, tool_architecture, []),
+    "cortex_preflight": ("Git-aware change review before merge: maps the current diff to risk, dependents, API/data surfaces and the tests to run.",
+       {"project": {"type": "string"}, "cwd": {"type": "string"}, "base": {"type": "string"},
+        "refresh": {"type": "string", "enum": ["auto", "never", "force"]}}, tool_preflight, []),
     "cortex_module": ("Module memory: purpose, files, invariants, pitfalls.",
        {"name": {"type": "string"}, "project": {"type": "string"}}, tool_module, ["name"]),
     "cortex_symbol": ("Find symbol definitions by exact name.",

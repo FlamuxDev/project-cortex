@@ -20,12 +20,14 @@ the server cannot reliably infer the active workspace.
 
 Use the packet as a prioritized map:
 
-1. Check its freshness and evidence warnings.
+1. Check `index_sync`, freshness, and evidence warnings. The default `auto`
+   mode fingerprints and refreshes changed indexable code before returning.
 2. Read the named `PRIMARY FILES` before expanding the search.
 3. Verify critical claims against the current source, especially when the
    worktree is dirty, the index is behind, or task terms were not found.
-4. Run `cortex_update` before relying on a stale index when updating it is safe
-   and within the user's request.
+4. If sync is `failed` or `unstable`, verify critical claims in source. Use a
+   forced refresh only after the worktree settles; use `never` only when an
+   intentionally stale diagnostic is required.
 
 If MCP tools are unavailable, use the CLI equivalent:
 
@@ -34,6 +36,11 @@ cortex task start "<task>"
 ```
 
 Capture the returned session id for task completion.
+
+For an unfamiliar repository, onboarding request, or architecture question,
+call `cortex_architecture` once before deeper navigation. It provides areas,
+boundaries, entrypoints, dependency hotspots, and API/data/test surfaces. Skip
+it when the task packet already provides enough local evidence.
 
 ## Navigate with narrow evidence
 
@@ -58,12 +65,19 @@ cortex impact "<file-or-symbol>"
 
 Do not infer permission for unrelated changes from the impact report.
 
+After a non-trivial implementation, call `cortex_preflight` before final
+verification. Its default base `HEAD` covers staged, unstaged, and untracked
+worktree changes; use the repository's target branch (for example
+`origin/main`) when the review must also cover commits on the current branch.
+Review its risk reasons, dependents, public/data surfaces, and selected tests.
+
 ## Verify and close the loop
 
 Run the related tests named in the packet plus any checks required by the
 repository. After the implementation is settled:
 
-1. Call `cortex_update` so the index matches the final source.
+1. Run the tests selected by the packet/preflight plus repository-required
+   checks, then call `cortex_update` so completion evidence matches final source.
 2. Call `cortex_task_complete` with the session id, actual outcome, tests run,
    and only durable root-cause or invariant lessons worth resurfacing later.
 

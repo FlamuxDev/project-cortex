@@ -35,7 +35,8 @@ def _dedupe(items, key):
     return out
 
 
-def build_sections(con, pid: str, task: str) -> list[tuple[str, str]]:
+def build_sections(con, pid: str, task: str,
+                   index_sync: dict | None = None) -> list[tuple[str, str]]:
     """Gather all evidence sections for a task in one project."""
     secs: list[tuple[str, str]] = []
     proj = con.execute("SELECT * FROM projects WHERE id=?", (pid,)).fetchone()
@@ -47,7 +48,17 @@ def build_sections(con, pid: str, task: str) -> list[tuple[str, str]]:
     indexed = (proj["indexed_commit"] or "")[:12]
     gitinfo = live_git(root, indexed)
     head, dirty, behind = gitinfo["head"], gitinfo["dirty"], gitinfo["behind"]
-    if not head:
+    sync_status = (index_sync or {}).get("status")
+    if sync_status in {"current", "refreshed"} and head:
+        action = "auto-refreshed" if sync_status == "refreshed" else "verified current"
+        fresh = (f"⚠ DIRTY — current working-tree snapshot ({action})" if dirty
+                 else f"fresh ({action})")
+    elif sync_status == "unstable":
+        fresh = "⚠ WORKTREE CHANGED DURING INDEX — verify edited files before acting"
+    elif sync_status == "failed":
+        fresh = ("⚠ AUTO-REFRESH FAILED — " +
+                 (index_sync or {}).get("error", "verify against current code"))
+    elif not head:
         fresh = ("not available (non-git project)" if not indexed else
                  "⚠ STALE — repository has no readable git HEAD")
     elif head != indexed:
@@ -78,9 +89,13 @@ def build_sections(con, pid: str, task: str) -> list[tuple[str, str]]:
         fresh = f"⚠ STALE — {disk_warning}"
     langs = ",".join(l.lstrip(".") for l in (proj["languages"] or "").split(",") if l) or "unknown"
     stack = langs + (f" | frameworks: {proj['frameworks']}" if proj["frameworks"] else "")
-    header = f"PROJECT: {proj['name']} ({pid})\nPATH: {root}\nSTACK: {stack}\nFRESHNESS: {fresh}"
+    header = (f"PROJECT: {proj['name']} ({pid})\nPATH: {root}\nSTACK: {stack}"
+              f"\nINDEX SYNC: {sync_status or 'not-checked'}\nFRESHNESS: {fresh}")
     if dirty:
-        header += f"\nNOTE: {dirty} uncommitted changes exist in worktree (analysis may lag worktree)"
+        note = ("indexable code changes are included in this snapshot"
+                if sync_status in {"current", "refreshed"}
+                else "indexable code may differ from the index")
+        header += f"\nNOTE: {dirty} uncommitted change(s) exist; {note}"
     secs.append(("HEADER", header))
 
     # lexical candidates
@@ -305,17 +320,25 @@ CROSS_CUES = ("across projects", "all projects", "every project", "which project
               "قبل", "سابقا")
 
 
-def context_cross(con, task: str, budget: int = 4000) -> dict:
+def context_cross(con, task: str, budget: int = 4000,
+                  refresh: str = "auto") -> dict:
     """Cross-project query: group matching memories/symbols by project."""
+    from cortex.indexer import refresh_project
+    sync = {}
+    for row in con.execute("SELECT id FROM projects WHERE status='active' ORDER BY id"):
+        sync[row["id"]] = refresh_project(con, row["id"], mode=refresh)
     limit_chars = budget * CHARS_PER_TOKEN
     mems = search.search_memories(con, None, task, limit=24)
     syms = search.search_symbols(con, None, task, limit=30)
     files = search.search_files(con, None, task, limit=20)
     if not (mems or syms or files):
         return {"packet": f"NO EVIDENCE for '{task}' in any indexed project.",
-                "tokens_est": 12, "truncated": False}
-    used = len("## CROSS-PROJECT RESULTS\n")
-    out = ["## CROSS-PROJECT RESULTS"]
+                "tokens_est": 12, "truncated": False, "index_sync": sync}
+    sync_line = ", ".join(f"{pid}={result.get('status', 'unknown')}"
+                          for pid, result in sync.items())
+    prefix = f"## INDEX SYNC\n{sync_line or 'no active projects'}\n\n## CROSS-PROJECT RESULTS\n"
+    used = len(prefix)
+    out = [prefix]
     def emit(pid, line):
         nonlocal used
         block = f"[{pid or '?'}] {line}\n"
@@ -361,14 +384,15 @@ def context_cross(con, task: str, budget: int = 4000) -> dict:
     projs_touched = sorted({m["project_id"] for m in mems if m["project_id"]} |
                            {s["project_id"] for s in syms})
     return {"packet": packet, "tokens_est": used // CHARS_PER_TOKEN,
-            "truncated": used >= limit_chars, "projects": projs_touched}
+            "truncated": used >= limit_chars, "projects": projs_touched,
+            "index_sync": sync}
 
 
 def context(con, task: str, project_id: str | None = None, budget: int = 4000,
-            include_global: bool = True) -> dict:
+            include_global: bool = True, refresh: str = "auto") -> dict:
     tl = task.lower()
     if project_id is None and any(c in tl for c in CROSS_CUES):
-        return context_cross(con, task, budget)
+        return context_cross(con, task, budget, refresh=refresh)
     explicit_or_cwd_project = project_id
     pid = project_id or search.detect_named_project(con, task)
     if not pid:
@@ -389,8 +413,10 @@ def context(con, task: str, project_id: str | None = None, budget: int = 4000,
         if not hit:
             return {"error": (f"task matches no evidence in '{pid}' (lexical guess only); "
                               "pass --project explicitly or run inside the project directory")}
+    from cortex.indexer import refresh_project
+    index_sync = refresh_project(con, pid, mode=refresh)
     limit_chars = budget * CHARS_PER_TOKEN
-    sections = build_sections(con, pid, task)
+    sections = build_sections(con, pid, task, index_sync=index_sync)
 
     if include_global:
         gmems = search.search_memories(con, None, task, limit=3)
@@ -415,7 +441,7 @@ def context(con, task: str, project_id: str | None = None, budget: int = 4000,
             break
     packet = "".join(rendered).strip()
     return {"project": pid, "packet": packet, "tokens_est": used // CHARS_PER_TOKEN,
-            "truncated": used >= limit_chars}
+            "truncated": used >= limit_chars, "index_sync": index_sync}
 
 
 def impact(con, target: str, project_id: str | None = None) -> dict:
@@ -518,6 +544,7 @@ def max_risk(a: str, b: str) -> str:
     return a if order[a] >= order[b] else b
 
 
-def context_text(con, task: str, project_id=None, budget=4000) -> str:
-    r = context(con, task, project_id, budget)
+def context_text(con, task: str, project_id=None, budget=4000,
+                 refresh: str = "auto") -> str:
+    r = context(con, task, project_id, budget, refresh=refresh)
     return r.get("packet") or r.get("error", "")

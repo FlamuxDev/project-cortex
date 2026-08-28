@@ -4,14 +4,14 @@ These cover the failure modes where the brain keeps serving knowledge that no
 longer matches the filesystem, and where generated pages outlive their source.
 """
 from __future__ import annotations
-import json, pathlib, shutil, sqlite3, subprocess, sys, tempfile, unittest
+import json, os, pathlib, shutil, sqlite3, subprocess, sys, tempfile, unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from cortex.db import code_root, migrate                      # noqa: E402
 from cortex.indexer import index_project                      # noqa: E402
-from cortex.contextpack import context_text                   # noqa: E402
+from cortex.contextpack import context, context_text          # noqa: E402
 
 
 def _mem_db():
@@ -130,32 +130,74 @@ class TestDiskTruth(unittest.TestCase):
         self.assertIn("FRESHNESS: fresh", context_text(self.con, "fix billing", "p", 800))
 
     def test_dirty_worktree_is_not_reported_fresh(self):
-        (self.code / "src" / "billing.ts").write_text("export const changed = true\n")
+        (self.code / "src" / "billing.ts").write_text(
+            "export function changed() { return true }\n")
         txt = context_text(self.con, "fix billing", "p", 800)
         self.assertNotIn("FRESHNESS: fresh", txt)
         self.assertIn("DIRTY", txt)
+        self.assertIsNotNone(self.con.execute(
+            "SELECT 1 FROM symbols WHERE project_id='p' AND name='changed'").fetchone())
+
+    def test_live_guard_refreshes_each_new_dirty_snapshot_once(self):
+        billing = self.code / "src" / "billing.ts"
+        billing.write_text("export function firstSnapshot() { return 1 }\n")
+        first = context(self.con, "first snapshot billing", "p", 800)
+        self.assertEqual(first["index_sync"]["status"], "refreshed")
+        self.assertIsNotNone(self.con.execute(
+            "SELECT 1 FROM symbols WHERE project_id='p' AND name='firstSnapshot'").fetchone())
+
+        unchanged = context(self.con, "first snapshot billing", "p", 800)
+        self.assertEqual(unchanged["index_sync"]["status"], "current")
+
+        billing.write_text("export function secondSnapshot() { return 2 }\n")
+        second = context(self.con, "second snapshot billing", "p", 800)
+        self.assertEqual(second["index_sync"]["status"], "refreshed")
+        self.assertIsNotNone(self.con.execute(
+            "SELECT 1 FROM symbols WHERE project_id='p' AND name='secondSnapshot'").fetchone())
+        self.assertIsNone(self.con.execute(
+            "SELECT 1 FROM symbols WHERE project_id='p' AND name='firstSnapshot'").fetchone())
+
+    def test_non_code_dirty_file_does_not_force_reindex(self):
+        (self.code / "README.md").write_text("docs only\n")
+        result = context(self.con, "fix billing", "p", 800)
+        self.assertEqual(result["index_sync"]["status"], "current")
+        self.assertIn("DIRTY", result["packet"])
 
     def test_new_commit_reports_live_distance_before_reindex(self):
         (self.code / "src" / "new.ts").write_text("export const added = true\n")
         subprocess.run(["git", "-C", str(self.code), "add", "."], check=True)
         subprocess.run(["git", "-C", str(self.code), "-c", "user.email=t@t",
                         "-c", "user.name=t", "commit", "-qm", "feat: add file"], check=True)
-        txt = context_text(self.con, "fix billing", "p", 800)
+        txt = context_text(self.con, "fix billing", "p", 800, refresh="never")
         self.assertNotIn("FRESHNESS: fresh", txt)
         self.assertIn("1 commit(s)", txt)
 
     def test_non_git_project_reports_freshness_unavailable(self):
         shutil.rmtree(self.code / ".git")
         self.con.execute("UPDATE projects SET indexed_commit=NULL WHERE id='p'")
-        txt = context_text(self.con, "fix billing", "p", 800)
+        txt = context_text(self.con, "fix billing", "p", 800, refresh="never")
         self.assertIn("FRESHNESS: not available (non-git project)", txt)
         self.assertNotIn("STALE", txt)
+
+    def test_non_git_live_guard_updates_incrementally(self):
+        shutil.rmtree(self.code / ".git")
+        self.con.execute("UPDATE projects SET indexed_commit=NULL WHERE id='p'")
+        self.con.commit()
+        billing = self.code / "src" / "billing.ts"
+        billing.write_text("export function offlineChange() { return true }\n")
+
+        result = context(self.con, "offline billing change", "p", 800)
+
+        self.assertEqual(result["index_sync"]["status"], "refreshed")
+        self.assertEqual(result["index_sync"]["stats"]["changed"], 1)
+        self.assertIsNotNone(self.con.execute(
+            "SELECT 1 FROM symbols WHERE project_id='p' AND name='offlineChange'").fetchone())
 
     def test_moved_code_is_flagged_not_called_fresh(self):
         # the directory survives but the indexed files no longer live there
         for f in (self.code / "src").iterdir():
             f.unlink()
-        txt = context_text(self.con, "fix billing", "p", 800)
+        txt = context_text(self.con, "fix billing", "p", 800, refresh="never")
         self.assertNotIn("FRESHNESS: fresh", txt)
         self.assertIn("STALE", txt)
 
@@ -171,6 +213,19 @@ class TestDiskTruth(unittest.TestCase):
             context_text(self.con, "anything", "no-such-project", 800)
         self.assertIn("no-such-project", str(cm.exception))
         self.assertIn("p", str(cm.exception))   # names what IS indexed
+
+    def test_refresh_lock_recovers_after_owner_process_dies(self):
+        from cortex.indexer import _lock_dir, project_refresh_lock
+        lock_root = _lock_dir(self.con)
+        lock_root.mkdir(parents=True, exist_ok=True)
+        lock = lock_root / "p.lock"
+        dead_pid = max(os.getpid() + 10_000_000, 999_999_999)
+        lock.write_text(f"pid={dead_pid} time=0\n")
+
+        with project_refresh_lock(self.con, "p", timeout=0.2):
+            self.assertTrue(lock.exists())
+
+        self.assertFalse(lock.exists())
 
 
 class TestFtsCoverage(unittest.TestCase):
@@ -199,6 +254,45 @@ class TestFtsCoverage(unittest.TestCase):
 
         self.assertEqual(fts_rows("a"), before, "indexing 'b' wiped 'a' from the symbol index")
         self.assertGreater(fts_rows("b"), 0)
+
+    def test_version_upgrade_repairs_derived_index(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        con = _mem_db()
+        self.addCleanup(con.close)
+        proj, code = _repo(pathlib.Path(tmp.name))
+        _index(con, proj, code)
+        con.execute("UPDATE refs SET dst_path=NULL WHERE project_id='p'")
+        con.execute("UPDATE index_state SET value='1:legacy' WHERE key='worktree:p'")
+        con.commit()
+
+        result = context(con, "billing charge", "p", 800)
+
+        self.assertEqual(result["index_sync"]["status"], "refreshed")
+        self.assertEqual(con.execute(
+            """SELECT dst_path FROM refs WHERE project_id='p' AND src_path='src/index.ts'
+               AND kind='import'""").fetchone()["dst_path"], "src/billing.ts")
+        self.assertIn("format_repair", result["index_sync"]["stats"])
+
+    def test_full_rebuild_preserves_live_module_ownership(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        con = _mem_db()
+        self.addCleanup(con.close)
+        proj, code = _repo(pathlib.Path(tmp.name))
+        _index(con, proj, code)
+        con.execute("""INSERT INTO modules(id,project_id,name,slug,path_prefixes)
+                       VALUES ('p:billing','p','Billing','billing','src')""")
+        con.executemany("""INSERT INTO module_files(module_id,project_id,path)
+                           VALUES ('p:billing','p',?)""",
+                        [("src/billing.ts",), ("src/gone.ts",)])
+        con.commit()
+
+        _index(con, proj, code)
+
+        owned = [row["path"] for row in con.execute(
+            "SELECT path FROM module_files WHERE module_id='p:billing' ORDER BY path")]
+        self.assertEqual(owned, ["src/billing.ts"])
 
     def test_reindex_prunes_contentless_fts_ghosts(self):
         tmp = tempfile.TemporaryDirectory()

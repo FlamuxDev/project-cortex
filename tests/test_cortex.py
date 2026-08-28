@@ -174,6 +174,12 @@ class TestPipeline(unittest.TestCase):
         if edge["dst_path"]:
             self.assertEqual(edge["dst_path"], "src/db.ts")
 
+    def test_python_src_layout_import_resolution(self):
+        from cortex.indexer import resolve_import
+        files = {"src/cortex/db.py", "src/cortex/__init__.py", "tests/test_db.py"}
+        self.assertEqual(resolve_import("cortex.db.connect", "tests/test_db.py", files, "p"),
+                         "src/cortex/db.py")
+
     def test_test_mapping(self):
         t = self.con.execute("SELECT targets_json FROM tests WHERE path LIKE '%auth.test%'").fetchone()
         self.assertIsNotNone(t)
@@ -257,6 +263,12 @@ class TestMcpServer(unittest.TestCase):
         names = {t["name"] for t in tools["result"]["tools"]}
         self.assertIn("cortex_context", names)
         self.assertIn("cortex_impact", names)
+        self.assertIn("cortex_architecture", names)
+        self.assertIn("cortex_preflight", names)
+        context_tool = next(t for t in tools["result"]["tools"]
+                            if t["name"] == "cortex_context")
+        self.assertEqual(context_tool["inputSchema"]["properties"]["refresh"]["enum"],
+                         ["auto", "never", "force"])
         call = handle({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
                        "params": {"name": "cortex_search",
                                   "arguments": {"query": "auth session", "project": "fixture"}}})

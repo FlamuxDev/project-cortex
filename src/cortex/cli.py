@@ -87,11 +87,12 @@ def cmd_context(args):
     con = connect()
     if getattr(args, "all", False):
         from cortex.contextpack import context_cross
-        print(context_cross(con, args.task, budget=args.budget)["packet"])
+        print(context_cross(con, args.task, budget=_budget(args.budget),
+                            refresh=args.refresh)["packet"])
         return
     pid = _proj(con, args)
     print(context_text(con, args.task, project_id=pid,
-                       budget=_budget(args.budget)))
+                       budget=_budget(args.budget), refresh=args.refresh))
 
 
 def cmd_search(args):
@@ -160,6 +161,31 @@ def cmd_impact(args):
         print("\nPAST FIXES HERE:")
         for c in r["past_fixes"]:
             print(f"  {c}")
+
+
+def cmd_architecture(args):
+    from cortex.intelligence import architecture, format_architecture
+    con = connect()
+    pid = _proj(con, args)
+    if not pid:
+        print("ERROR: could not resolve a project; run inside it or pass --project")
+        raise SystemExit(2)
+    print(format_architecture(architecture(con, pid, refresh=args.refresh)))
+
+
+def cmd_preflight(args):
+    from cortex.intelligence import format_preflight, preflight
+    con = connect()
+    pid = _proj(con, args)
+    if not pid:
+        print("ERROR: could not resolve a project; run inside it or pass --project")
+        raise SystemExit(2)
+    try:
+        result = preflight(con, pid, base=args.base, refresh=args.refresh)
+    except ValueError as exc:
+        print(f"ERROR: {exc}")
+        raise SystemExit(2) from None
+    print(format_preflight(result))
 
 
 def cmd_update(args):
@@ -416,10 +442,12 @@ def cmd_task(args):
 
 def _run_task(args, S, con):
     if args.op == "start":
-        r = S.task_start(con, args.task, project=args.project, budget=_budget(args.budget))
+        r = S.task_start(con, args.task, project=args.project, budget=_budget(args.budget),
+                         refresh=args.refresh)
         if "error" in r:
             raise ValueError(r["error"])
-        print(f"SESSION #{r['session_id']}  project={r['project']}  freshness={r['freshness']}  ~{r['tokens_est']} tokens")
+        print(f"SESSION #{r['session_id']}  project={r['project']}  freshness={r['freshness']}  "
+              f"index={r.get('index_sync', {}).get('status', 'unknown')}  ~{r['tokens_est']} tokens")
         print(r["packet"])
         print(f"\n[hint] when done: cortex task complete --session {r['session_id']} --outcome tested "
               f"--lessons \"...\"")
@@ -503,10 +531,12 @@ def main():
     sub.add_parser("projects").set_defaults(fn=cmd_projects)
     sp = sub.add_parser("init", help="register a repo (or dir of repos) and index it"); sp.add_argument("path"); sp.set_defaults(fn=cmd_init)
     sp = sub.add_parser("status"); sp.add_argument("task", nargs="?"); sp.add_argument("--project"); sp.set_defaults(fn=cmd_status)
-    sp = sub.add_parser("context"); sp.add_argument("task"); sp.add_argument("--project"); sp.add_argument("--budget", default=4000); sp.add_argument("--all", action="store_true"); sp.set_defaults(fn=cmd_context)
+    sp = sub.add_parser("context"); sp.add_argument("task"); sp.add_argument("--project"); sp.add_argument("--budget", default=4000); sp.add_argument("--all", action="store_true"); sp.add_argument("--refresh", choices=["auto", "never", "force"], default="auto"); sp.set_defaults(fn=cmd_context)
     sp = sub.add_parser("search"); sp.add_argument("query"); sp.add_argument("--project"); sp.add_argument("--limit", type=int, default=8); sp.set_defaults(fn=cmd_search)
     sp = sub.add_parser("module"); sp.add_argument("name"); sp.add_argument("--project"); sp.set_defaults(fn=cmd_module)
     sp = sub.add_parser("impact"); sp.add_argument("target"); sp.add_argument("--project"); sp.set_defaults(fn=cmd_impact)
+    sp = sub.add_parser("architecture", help="one-call structural map, boundaries and hotspots"); sp.add_argument("--project"); sp.add_argument("--refresh", choices=["auto", "never", "force"], default="auto"); sp.set_defaults(fn=cmd_architecture)
+    sp = sub.add_parser("preflight", help="map the current git diff to risk and tests"); sp.add_argument("--project"); sp.add_argument("--base", default="HEAD"); sp.add_argument("--refresh", choices=["auto", "never", "force"], default="auto"); sp.set_defaults(fn=cmd_preflight)
     sp = sub.add_parser("update"); sp.add_argument("project", nargs="?"); sp.set_defaults(fn=cmd_update)
     sp = sub.add_parser("index"); sp.add_argument("project", nargs="*"); sp.set_defaults(fn=cmd_index)
     sp = sub.add_parser("tests"); sp.add_argument("target"); sp.add_argument("--project"); sp.set_defaults(fn=cmd_tests)
@@ -521,7 +551,7 @@ def main():
     ai.set_defaults(fn=cmd_agents)
     sp = sub.add_parser("quality").set_defaults(fn=cmd_quality)
     sp = sub.add_parser("task"); tsub = sp.add_subparsers(dest="op", required=True)
-    ts = tsub.add_parser("start"); ts.add_argument("task"); ts.add_argument("--project"); ts.add_argument("--budget", default=3000); ts.set_defaults(fn=cmd_task)
+    ts = tsub.add_parser("start"); ts.add_argument("task"); ts.add_argument("--project"); ts.add_argument("--budget", default=3000); ts.add_argument("--refresh", choices=["auto", "never", "force"], default="auto"); ts.set_defaults(fn=cmd_task)
     tc = tsub.add_parser("complete"); tc.add_argument("--session", type=int, required=True); tc.add_argument("--outcome", default="implemented", choices=["implemented", "tested", "verified", "failed", "partial", "abandoned"]); tc.add_argument("--problem"); tc.add_argument("--root-cause", dest="root_cause"); tc.add_argument("--lessons", nargs="+"); tc.add_argument("--failed-approach", dest="failed_approach", nargs="+"); tc.add_argument("--solution", nargs="+"); tc.add_argument("--tests-run", dest="tests_run"); tc.add_argument("--project"); tc.set_defaults(fn=cmd_task)
     tl = tsub.add_parser("list"); tl.set_defaults(fn=cmd_task)
     tw = tsub.add_parser("show"); tw.add_argument("session", type=int); tw.set_defaults(fn=cmd_task)
